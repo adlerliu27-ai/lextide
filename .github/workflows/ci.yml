@@ -1,0 +1,48 @@
+name: Offline core tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-core:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          version: "0.12.5"
+          python-version: "3.13"
+      - name: Install locked core and development dependencies
+        run: uv sync --locked --no-default-groups --group dev --python 3.13
+      - name: Check Python style and syntax
+        run: |
+          uv run --no-sync --offline --python 3.13 ruff check src tests scripts packaging/macos/launcher.py
+          uv run --no-sync --offline --python 3.13 ruff format --check src tests scripts packaging/macos/launcher.py
+          uv run --no-sync --offline --python 3.13 python -m compileall -q src
+      - name: Run offline tests without GUI, FFmpeg, or model inference
+        run: |
+          mkdir -p .artifacts/ci
+          uv run --no-sync --offline --python 3.13 python -m pytest \
+            --basetemp=.artifacts/ci/pytest \
+            tests/test_text_cli.py \
+            tests/test_edge.py \
+            tests/test_jobs.py \
+            tests/test_models.py \
+            tests/test_subtitles.py \
+            tests/test_subtitles_edge_prefixes.py \
+            tests/test_g61_quotes.py \
+            tests/test_g3_document.py \
+            tests/test_g3_storage.py \
+            tests/test_g5_packaging.py \
+            tests/test_cleaning.py \
+            tests/test_g61_cleaning.py \
+            tests/test_source_snapshot.py

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lextide"
+authors = [{ name = "Mingjia Liu", email = "mingjial@smu.edu" }]
+license = { text = "MIT" }
+version = "0.6.1"
+description = "A Text-to-Speech and Listening Studio."
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+dependencies = ["edge-tts==7.3.1", "aiohttp==3.14.5", "certifi==2026.7.22"]
+
+[project.optional-dependencies]
+desktop = [
+    "PySide6-Essentials==6.12.0",
+    "PySide6-Addons==6.12.0",
+    "pypdf==6.21.1",
+    "markdown-it-py==4.2.0",
+]
+
+[project.scripts]
+lextide = "lextide.cli:main"
+tts-studio = "lextide.cli:main"
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.14.0"]
+bundle = ["pyinstaller==6.22.3", "pyinstaller-hooks-contrib==2026.8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lextide"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --basetemp=.artifacts/codex-g4/pytest"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

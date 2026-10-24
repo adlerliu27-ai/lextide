@@ -1,0 +1,817 @@
+{
+  "status": "DEVELOPMENT_RELEASE_PENDING",
+  "purpose": "Unmodified official notice snapshots. Inclusion is not a claim of complete binary-specific license or source compliance.",
+  "files": [
+    {
+      "file": "cpython-3.14.6/LICENSE.txt",
+      "source_path": "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/LICENSE.txt",
+      "reference_url": "https://docs.python.org/3.14/license.html",
+      "scope": "Installed CPython 3.14.6 license; unmodified",
+      "retrieved_at": "2026-10-18T07:22:59.206206+00:00",
+      "bytes": 13804,
+      "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231"
+    },
+    {
+      "file": "cpython-3.14.6/incorporated-software-license.rst.txt",
+      "source_path": "/Library/Frameworks/Python.framework/Versions/3.14/Resources/English.lproj/Documentation/_sources/license.rst.txt",
+      "reference_url": "https://docs.python.org/3.14/license.html",
+      "scope": "Installed CPython 3.14.6 documentation including incorporated-software notices; documentation itself states list is incomplete",
+      "retrieved_at": "2026-10-18T07:22:59.207084+00:00",
+      "bytes": 57595,
+      "sha256": "c695d550b135e53e38807e76496d1db17d22c40e461d1f3f354c86188d3305dd"
+    },
+    {
+      "file": "cpython-3.14.6/license.html",
+      "source_path": "/Library/Frameworks/Python.framework/Versions/3.14/Resources/English.lproj/Documentation/license.html",
+      "reference_url": "https://docs.python.org/3.14/license.html",
+      "scope": "Installed CPython 3.14.6 rendered notice reference; no stylesheet/assets copied",
+      "retrieved_at": "2026-10-18T07:22:59.208240+00:00",
+      "bytes": 87612,
+      "sha256": "f31505e0c35a59ee20f0dd074d2836d297f161fbbb4cb817dbb080705594b107"
+    },
+    {
+      "file": "ffmpeg-9.0.1/COPYING.LGPLv2.1",
+      "source_url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/COPYING.LGPLv2.1",
+      "resolved_url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/COPYING.LGPLv2.1",
+      "scope": "FFmpeg 9.0.1 upstream LGPL 2.1 full text",
+      "retrieved_at": "2026-10-18T07:22:59.128833+00:00",
+      "bytes": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    {
+      "file": "ffmpeg-9.0.1/LICENSE.md",
+      "source_url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/LICENSE.md",
+      "resolved_url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/LICENSE.md",
+      "scope": "FFmpeg 9.0.1 upstream licensing rules; not a corresponding-source archive",
+      "retrieved_at": "2026-10-18T07:22:59.203228+00:00",
+      "bytes": 4346,
+      "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af"
+    },
+    {
+      "file": "openssl-3.5.7/LICENSE.txt",
+      "source_url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.7/LICENSE.txt",
+      "resolved_url": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.7/LICENSE.txt",
+      "scope": "OpenSSL 3.5.7 runtime license; exact native payload still checked after build",
+      "retrieved_at": "2026-10-18T07:22:59.015477+00:00",
+      "bytes": 10175,
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+    },
+    {
+      "file": "pyside-doc/licenses.html",
+      "source_url": "https://doc.qt.io/qtforpython-6/licenses.html",
+      "resolved_url": "https://doc.qt.io/qtforpython-6/licenses.html",
+      "scope": "Qt for Python official licensing and attribution reference",
+      "retrieved_at": "2026-10-18T07:21:57.454628+00:00",
+      "bytes": 436694,
+      "sha256": "be84bd3364cd42ee2e600ddcffdd50e6d55ae7adbc1c48086ee21e7a01b5a845"
+    },
+    {
+      "file": "pyside6-6.12.0/Apache-2.0.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/Apache-2.0.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/Apache-2.0.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:55.899497+00:00",
+      "bytes": 10398,
+      "sha256": "e3ba223bb1423f0aad8c3dfce0fe3148db48926d41e6fbc3afbbf5ff9e1c89cb"
+    },
+    {
+      "file": "pyside6-6.12.0/BSD-3-Clause.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/BSD-3-Clause.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/BSD-3-Clause.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:58.903825+00:00",
+      "bytes": 1478,
+      "sha256": "62803a6fcceef9091a129d7293d2469ea332b35d30f5e1bc4c628a9f35f3d29c"
+    },
+    {
+      "file": "pyside6-6.12.0/GFDL-1.3-no-invariants-only.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/GFDL-1.3-no-invariants-only.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/GFDL-1.3-no-invariants-only.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:58.142442+00:00",
+      "bytes": 22955,
+      "sha256": "110535522396708cea37c72a802c5e7e81391139f5f7985631c93ef242b206a4"
+    },
+    {
+      "file": "pyside6-6.12.0/GPL-2.0-only.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/GPL-2.0-only.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/GPL-2.0-only.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:54.901579+00:00",
+      "bytes": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+    },
+    {
+      "file": "pyside6-6.12.0/GPL-3.0-only.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/GPL-3.0-only.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/GPL-3.0-only.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:56.471048+00:00",
+      "bytes": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+      "file": "pyside6-6.12.0/LGPL-3.0-only.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/LGPL-3.0-only.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/LGPL-3.0-only.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:55.541602+00:00",
+      "bytes": 7651,
+      "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+    },
+    {
+      "file": "pyside6-6.12.0/Qt-GPL-exception-1.0.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/Qt-GPL-exception-1.0.txt?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/LICENSES/Qt-GPL-exception-1.0.txt?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream exact license text; per-file applicability required",
+      "retrieved_at": "2026-10-18T07:21:56.288685+00:00",
+      "bytes": 965,
+      "sha256": "40678d338ce53cd93f8b22b281a2ecbcaa3ee65ce60b25ffb0c462b0530846b2"
+    },
+    {
+      "file": "pyside6-6.12.0/README.md",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/README.md?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/README.md?h=6.12.0",
+      "scope": "PySide6 6.12.0 upstream licensing context; not corresponding source",
+      "retrieved_at": "2026-10-18T07:21:57.723074+00:00",
+      "bytes": 9181,
+      "sha256": "94ba63b907235169b408b099606c91eaf5cd35ef1c71947a879c51dc239bb8c7"
+    },
+    {
+      "file": "pyside6-6.12.0/libpyside-pyside-cpp-copyright-reference.txt",
+      "source_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/sources/pyside6/libpyside/pyside.cpp?h=6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/pyside/pyside-setup.git/plain/sources/pyside6/libpyside/pyside.cpp?h=6.12.0",
+      "scope": "Unmodified upstream file with PySide copyright/SPDX header; representative source reference, not complete corresponding source or all copyright notices",
+      "retrieved_at": "2026-10-18T07:22:57.833913+00:00",
+      "bytes": 39010,
+      "sha256": "1f21ca591de01501649196aba5a471f30ecfb8ad4ea54a634881477d093b586b"
+    },
+    {
+      "file": "qt-doc/licenses-used-in-qt.html",
+      "source_url": "https://doc.qt.io/qt-6/licenses-used-in-qt.html",
+      "resolved_url": "https://doc.qt.io/qt-6/licenses-used-in-qt.html",
+      "scope": "Qt 6.12.0 official third-party index; reference superset",
+      "retrieved_at": "2026-10-18T07:21:32.610393+00:00",
+      "bytes": 88318,
+      "sha256": "4a3901f264ad2dca648d451efb51e638dd7e8e70a31f9d7001019b04b59fe55c"
+    },
+    {
+      "file": "qt-doc/qtconcurrent-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtconcurrent-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtconcurrent-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:54.137915+00:00",
+      "bytes": 25880,
+      "sha256": "e531d89da22fe5522b3121cf2c426ef1cf6e131896bfec05cf420dec689e5e65"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-blake2.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-blake2.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-blake2.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:34.561169+00:00",
+      "bytes": 36427,
+      "sha256": "e3092b0d857867fcc6e1ecf7382a0624f96afbf8558bdd44b3ba9872bd460378"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-doubleconversion.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-doubleconversion.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-doubleconversion.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:34.049028+00:00",
+      "bytes": 19795,
+      "sha256": "f7e844ecc5a777a788cf5a41c3248098960dea047dde341ada5e1709337c6b88"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-easing.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-easing.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-easing.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:34.238896+00:00",
+      "bytes": 19419,
+      "sha256": "2300b6737d4f2be0f3cbf9071d454b7364f3ba21e9eae48b03be7e10e04198c0"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-forkfd.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-forkfd.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-forkfd.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:37.556530+00:00",
+      "bytes": 18977,
+      "sha256": "fb2e577a3340a047eab8da43da557dd8efb795df49a2ba465a8fbabb0b345516"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-md4.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-md4.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-md4.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:36.756178+00:00",
+      "bytes": 24971,
+      "sha256": "68843e9e30cbf8e67d8cf137cc7f77d0236f35d573c136a590e01b6c6748814d"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-md5.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-md5.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-md5.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:35.461267+00:00",
+      "bytes": 24843,
+      "sha256": "74f01a980d3a5396941bd785af994f5988e4c16126b6f2635be25c56121b390a"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-pcre2-sljit.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-pcre2-sljit.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-pcre2-sljit.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:36.027372+00:00",
+      "bytes": 19690,
+      "sha256": "e1aab294a1b07aa43251caed51f4448a75637dfa8a75cfba2634dc65a0061631"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-pcre2.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-pcre2.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-pcre2.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:35.598483+00:00",
+      "bytes": 22260,
+      "sha256": "71666d2f36cf9ea24d5e16c8236729e4eb7fcaf498f6ddbad20f8985dc878997"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-qeventdispatcher-cf.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-qeventdispatcher-cf.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-qeventdispatcher-cf.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:35.435547+00:00",
+      "bytes": 19443,
+      "sha256": "3510c3e05d1f5c618cfdc1f84e91e9d75cf7fcc54af73dca604009d087e686db"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-rfc6234.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-rfc6234.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-rfc6234.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:38.958309+00:00",
+      "bytes": 19648,
+      "sha256": "6389b1b868bfb807530f7b329344560f54e407afd1c71c28018a865aa2a7997a"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-sha1.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-sha1.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-sha1.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:35.725604+00:00",
+      "bytes": 18062,
+      "sha256": "44c5eb3a79cf07d4d2d2e2dcba6f9df5f8e648735cdf8b52341aa0f500db5fbe"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-sha3-endian.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-sha3-endian.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-sha3-endian.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:37.314557+00:00",
+      "bytes": 18720,
+      "sha256": "fb64e26629a6ef0062bbfe17d665aa99b061c7477db2a41988430dadfdf58750"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-sha3-keccak.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-sha3-keccak.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-sha3-keccak.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:35.690195+00:00",
+      "bytes": 25700,
+      "sha256": "632754c5c76d78612874af4bbc926b2e7efb64ecc87c3b4bf264f29f7ecd86df"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-siphash.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-siphash.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-siphash.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:38.237244+00:00",
+      "bytes": 25067,
+      "sha256": "3c637f5319c33d43ece28b2c15e47046072a7d532a5cb7767dbe40e2a745b024"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-tika-mimetypes.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-tika-mimetypes.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-tika-mimetypes.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:34.166867+00:00",
+      "bytes": 28922,
+      "sha256": "b0d1e85ab6dcf608a5b57a8a308e8cb9997c9e9daa26f1be1415427fbd2dc164"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-tinycbor.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-tinycbor.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-tinycbor.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:38.217905+00:00",
+      "bytes": 19133,
+      "sha256": "e109ef0416901192817956f6a778f8e064fc193ee956447c176887a82fdfe31f"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-tlexpected.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-tlexpected.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-tlexpected.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:40.353487+00:00",
+      "bytes": 25438,
+      "sha256": "997caf280206e36ca156175f5e8bc599aa34aa362b01a253bdcd219776654708"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-unicode-character-database.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-unicode-character-database.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-unicode-character-database.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:37.710682+00:00",
+      "bytes": 20249,
+      "sha256": "aa1a8affa2ae1814efac4a022a4bebe5bb153c7389c404e9c0e974cc7958733d"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-unicode-cldr.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-unicode-cldr.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-unicode-cldr.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:39.827979+00:00",
+      "bytes": 20526,
+      "sha256": "2791e5673ac12672990bef5a4d8d1d383ad528dc827a53440b828cabdfc4c762"
+    },
+    {
+      "file": "qt-doc/qtcore-attribution-zlib.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-attribution-zlib.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-attribution-zlib.html",
+      "scope": "Qt Core official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:34.115457+00:00",
+      "bytes": 19514,
+      "sha256": "ddb1332d9baa9b5bf3dc5b8e3da7dcd96bc404cac46393e17e68938e64d1260f"
+    },
+    {
+      "file": "qt-doc/qtcore-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtcore-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtcore-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:52.461347+00:00",
+      "bytes": 29573,
+      "sha256": "29af266901bfa402a05be5ad474d2d1f6af36522c05183bc6d36c6e39e6c9df6"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-aglfn.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-aglfn.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-aglfn.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:39.283855+00:00",
+      "bytes": 19515,
+      "sha256": "84b55313230d0a939e71b22a782d4ac7e1515157733a2d11401f7fe7465fe67b"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-android-native-style.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-android-native-style.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-android-native-style.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:43.117137+00:00",
+      "bytes": 18297,
+      "sha256": "aa2e458c7eb5e9d0e6213337c5c8d27df8271ac66f151929f2c35763ad1ddede"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-cocoa-platform-plugin.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-cocoa-platform-plugin.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-cocoa-platform-plugin.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:39.339410+00:00",
+      "bytes": 19891,
+      "sha256": "ec0c9f3f2898dd02bc43cc242ed01f478804a9e7c85c93f81e4ab14a599b2bf3"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-d3d12memoryallocator.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-d3d12memoryallocator.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-d3d12memoryallocator.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:41.273009+00:00",
+      "bytes": 19142,
+      "sha256": "e804441e4a06064396c64d59cced7365a7cf8a0e86c323db64e842e68ae67ff7"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-dejayvu.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-dejayvu.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-dejayvu.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:40.343615+00:00",
+      "bytes": 26858,
+      "sha256": "9517cde702cf92cf7bdebc4d2dc87386d31d60756f40a080d823a084f5ac14a8"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-emoji-segmenter.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-emoji-segmenter.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-emoji-segmenter.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:40.864661+00:00",
+      "bytes": 28490,
+      "sha256": "51cde7ae6bf492338dcdd22ae82f6205b10aae12ead9bcb78554da8ab7cb0b9f"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-freetype-bdf.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype-bdf.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype-bdf.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:41.457838+00:00",
+      "bytes": 20406,
+      "sha256": "c3b708445f7ecbe7270952b9fa42c0dd2feee188a0b90799f6a1ce7cc98df417"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-freetype-pcf.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype-pcf.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype-pcf.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:41.259396+00:00",
+      "bytes": 20366,
+      "sha256": "6a67abac65b319d5769e457676bea5d125dfda06b6a7ff326c0d7d237da48f36"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-freetype-zlib.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype-zlib.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype-zlib.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:43.677887+00:00",
+      "bytes": 18897,
+      "sha256": "f8a81be189d1a45c1a97fc782aed6787432ca89354ea265d9a06cb120c788b2c"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-freetype.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-freetype.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:42.251348+00:00",
+      "bytes": 46413,
+      "sha256": "a0ee18cd875b4a0188a9c343d3686fd3fc4baa369b60242c1dfadbb337894ea4"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-grayraster.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-grayraster.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-grayraster.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:39.786256+00:00",
+      "bytes": 44349,
+      "sha256": "ab886bdc562706610b4f6dd0981fed5f87bfa9c2504d0d7cbef92f0734df112b"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-harfbuzz-ng.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-harfbuzz-ng.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-harfbuzz-ng.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:41.727402+00:00",
+      "bytes": 20783,
+      "sha256": "67ed724619b820e6fcfb3a0f2cd7df3f84542e693239014081c843cd75e640e5"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-icc-srgb-color-profile.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-icc-srgb-color-profile.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-icc-srgb-color-profile.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:47.678370+00:00",
+      "bytes": 18497,
+      "sha256": "2ecb637312d9f522c3e3c207c96b39ac172411e3cb98f0a6835c6da84340c99c"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-libjpeg.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-libjpeg.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-libjpeg.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:41.758104+00:00",
+      "bytes": 26669,
+      "sha256": "35c72526d9e937758576a5f16fedfee306d2f6f274088561b340ed04a18c0e56"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-libpng.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-libpng.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-libpng.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:42.456724+00:00",
+      "bytes": 24198,
+      "sha256": "9ec6d5f9b33c0bcd6c4b81122a533b88cbee49c983981527a082d5589e00d780"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-md4c.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-md4c.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-md4c.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:42.585149+00:00",
+      "bytes": 19063,
+      "sha256": "95501a73a53ffff1fd22d420abd466a0ba83d021764d855c14914801b78b7519"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-opengl-es2-headers.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-opengl-es2-headers.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-opengl-es2-headers.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:44.737554+00:00",
+      "bytes": 19113,
+      "sha256": "ef33b009645d7f87c52a0b51def5731147b0b4c59c03f5b351f88a0ab6974d3a"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-opengl-headers.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-opengl-headers.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-opengl-headers.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:46.459501+00:00",
+      "bytes": 19078,
+      "sha256": "e23fcff62c6fc0e16c03e042ee2e47bdde486522ae1703f0210f2e3918650e4c"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-pixman.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-pixman.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-pixman.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:44.075545+00:00",
+      "bytes": 18999,
+      "sha256": "5b3b6a2dd7db6c2ec69ec5e995a79835691673d27ec554486f8986b2f4310a32"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-rhi-miniengine-d3d12-mipmap.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-rhi-miniengine-d3d12-mipmap.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-rhi-miniengine-d3d12-mipmap.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:43.301049+00:00",
+      "bytes": 19247,
+      "sha256": "2b77989967398ee245dff53ca4272f9ad79039ac787417e97d2831b04d777b5d"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-smooth-scaling-algorithm.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-smooth-scaling-algorithm.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-smooth-scaling-algorithm.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:45.503607+00:00",
+      "bytes": 21028,
+      "sha256": "946c6f288f46ff28e9b43930b813384efd00251390ab6f16d09070d976d549be"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-vulkan-xml-spec.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-vulkan-xml-spec.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-vulkan-xml-spec.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:44.125672+00:00",
+      "bytes": 29409,
+      "sha256": "f3f042a81db977e89351d2409348727580667a60eae9249ef7b1ebd17c0be3ee"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-vulkanmemoryallocator.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-vulkanmemoryallocator.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-vulkanmemoryallocator.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:46.116867+00:00",
+      "bytes": 19148,
+      "sha256": "ca54f612fa8b97abd338308e67940ca44d7b3b9bc55868438c99c05e89ee988c"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-webgradients.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-webgradients.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-webgradients.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:45.919776+00:00",
+      "bytes": 18930,
+      "sha256": "915f55ec16ebff896a74692c5eef5ca45f6af8c7dc2f4dc2ac2a92a1fe5f9df2"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-wintab.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-wintab.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-wintab.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:46.301353+00:00",
+      "bytes": 17946,
+      "sha256": "2df10517aaaba05291eb05cf361ec00690e14244f2fff241a120654c78671b97"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-xcb-xinput.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-xcb-xinput.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-xcb-xinput.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:47.866542+00:00",
+      "bytes": 19327,
+      "sha256": "4f9082895e6afc8b56f0a2c25b411180887e58b27db9ee807c79770c584edf61"
+    },
+    {
+      "file": "qt-doc/qtgui-attribution-xserverhelper.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-attribution-xserverhelper.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-attribution-xserverhelper.html",
+      "scope": "Qt GUI official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:46.196408+00:00",
+      "bytes": 20275,
+      "sha256": "fd6f484c84be899d82d003475a900cdd7ed4ca6c648a1f0d070e35c7eb759aab"
+    },
+    {
+      "file": "qt-doc/qtgui-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtgui-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtgui-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:51.174337+00:00",
+      "bytes": 28311,
+      "sha256": "2295c5d90a637f4c1731dd10009cb0f217e910fb73d8205416d70eb1b0fa5388"
+    },
+    {
+      "file": "qt-doc/qtimageformats-attribution-libtiff.html",
+      "source_url": "https://doc.qt.io/qt-6/qtimageformats-attribution-libtiff.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtimageformats-attribution-libtiff.html",
+      "scope": "Qt Image Formats official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:46.768812+00:00",
+      "bytes": 19228,
+      "sha256": "7242ce571e4b177c4eb899f46eedf4d7c3d82d26ac03992774022eae61d7009c"
+    },
+    {
+      "file": "qt-doc/qtimageformats-attribution-libwebp.html",
+      "source_url": "https://doc.qt.io/qt-6/qtimageformats-attribution-libwebp.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtimageformats-attribution-libwebp.html",
+      "scope": "Qt Image Formats official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:48.119272+00:00",
+      "bytes": 19686,
+      "sha256": "80c7635aa866cc820023fd0e777d3f003b11440980a785f01f8e2d1f7147dbff"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-dr-libs.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-dr-libs.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-dr-libs.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:49.606696+00:00",
+      "bytes": 20718,
+      "sha256": "ce0736418521d826f91ba4f81aac8439fba0e8a4ecfb00c0350d482628fd3d24"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-ffmpeg-boost.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg-boost.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg-boost.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:48.693106+00:00",
+      "bytes": 19263,
+      "sha256": "65a595a29493e4bd290657597681bf793128629045ec8af414bf6ecf0fff3671"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-ffmpeg-libjpeg.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg-libjpeg.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg-libjpeg.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:51.191340+00:00",
+      "bytes": 22401,
+      "sha256": "6b1352933eb42d24ad3fc54dd02e612449644610ad1bc843932dd844f51f3c32"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-ffmpeg-zlib.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg-zlib.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg-zlib.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:49.591314+00:00",
+      "bytes": 18701,
+      "sha256": "6f97bcc7e6bab11837a835c94ea94de668d7b28eef1c4dad2e19b572d31b8848"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-ffmpeg.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-ffmpeg.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:49.667988+00:00",
+      "bytes": 68138,
+      "sha256": "566c42a25eaabf712a028f3148cdd89f3dcae035d7552de6ecd9884377a4fa0d"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-signalsmith-stretch.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-signalsmith-stretch.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-signalsmith-stretch.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:49.219522+00:00",
+      "bytes": 19309,
+      "sha256": "635d88c72f01b9468622c73f1c29ebacde1743151547dbba8af72a880b56fa46"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-attribution-tlsf.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-tlsf.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-attribution-tlsf.html",
+      "scope": "Qt Multimedia official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:49.836436+00:00",
+      "bytes": 19579,
+      "sha256": "cf27cb3fa91002abedfa8ecec452c7aebb59f0c777edf87936d7bd7433237692"
+    },
+    {
+      "file": "qt-doc/qtmultimedia-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtmultimedia-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtmultimedia-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:53.592375+00:00",
+      "bytes": 38458,
+      "sha256": "07ccdbcb0367c13a320312631cb3dbadbb03ddfaaae2682b971b3a04fd9572eb"
+    },
+    {
+      "file": "qt-doc/qtnetwork-attribution-libpsl.html",
+      "source_url": "https://doc.qt.io/qt-6/qtnetwork-attribution-libpsl.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtnetwork-attribution-libpsl.html",
+      "scope": "Qt Network official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:50.508699+00:00",
+      "bytes": 20040,
+      "sha256": "0475f8d9a509ab3988806877ef3cef35f249a9294f247af78fa86bdda1f83f16"
+    },
+    {
+      "file": "qt-doc/qtnetwork-attribution-psl-data.html",
+      "source_url": "https://doc.qt.io/qt-6/qtnetwork-attribution-psl-data.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtnetwork-attribution-psl-data.html",
+      "scope": "Qt Network official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:51.164299+00:00",
+      "bytes": 35482,
+      "sha256": "beff6a136244f6c849b681704036956894ef7c76159924cd3b9d573d26f3cbf3"
+    },
+    {
+      "file": "qt-doc/qtnetwork-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtnetwork-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtnetwork-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:52.465545+00:00",
+      "bytes": 23551,
+      "sha256": "6f0245718a3086fd825af101de16dbf24efc3c7fcdafaee63fe888299156672d"
+    },
+    {
+      "file": "qt-doc/qtopengl-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtopengl-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtopengl-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:54.708532+00:00",
+      "bytes": 23624,
+      "sha256": "c74e50299dd0ef3bffd6d0fc25d9b54239bc97069d7e71c3a18074314b2f2436"
+    },
+    {
+      "file": "qt-doc/qtqml-attribution-masm.html",
+      "source_url": "https://doc.qt.io/qt-6/qtqml-attribution-masm.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtqml-attribution-masm.html",
+      "scope": "Qt Qml official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:51.744230+00:00",
+      "bytes": 19860,
+      "sha256": "1ea6c73901b3cebe1447f0aed23781cdc396bc36797861d14a6b550e3e9a8317"
+    },
+    {
+      "file": "qt-doc/qtqml-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtqml-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtqml-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:54.309777+00:00",
+      "bytes": 24942,
+      "sha256": "5c455f837a0dea83f525016770aa7b4e5f95f8e0f2a5d1168ef53d7033a8e9a2"
+    },
+    {
+      "file": "qt-doc/qtquick-attribution-yoga.html",
+      "source_url": "https://doc.qt.io/qt-6/qtquick-attribution-yoga.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtquick-attribution-yoga.html",
+      "scope": "Qt Quick official third-party attribution; applicability pending binary mapping",
+      "retrieved_at": "2026-10-18T07:21:53.017781+00:00",
+      "bytes": 19307,
+      "sha256": "96619fff5869e3b9e10db9c9338eae39615c759d2ccd2a6952eb8cf27edf24ee"
+    },
+    {
+      "file": "qt-doc/qtquick-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtquick-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtquick-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:54.109807+00:00",
+      "bytes": 27793,
+      "sha256": "3627ae5f78f2a0dd61c97ca44dbb77a594e24d975be191e2089012f9566a949a"
+    },
+    {
+      "file": "qt-doc/qtsvg-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtsvg-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtsvg-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:55.558759+00:00",
+      "bytes": 21536,
+      "sha256": "d7a63cc96429ddeee109488c64d778be36526ac681044d19e52f1d0611d277f4"
+    },
+    {
+      "file": "qt-doc/qtwidgets-index.html",
+      "source_url": "https://doc.qt.io/qt-6/qtwidgets-index.html",
+      "resolved_url": "https://doc.qt.io/qt-6/qtwidgets-index.html",
+      "scope": "Qt 6.12.0 module reference",
+      "retrieved_at": "2026-10-18T07:21:53.259596+00:00",
+      "bytes": 29565,
+      "sha256": "bccb24340b0a384f2818ba43458f21a1d2f172196dc759e1e835def3026fda21"
+    },
+    {
+      "file": "qtbase-6.12.0/LGPL-2.1-or-later.txt",
+      "source_url": "https://code.qt.io/cgit/qt/qtbase.git/plain/LICENSES/LGPL-2.1-or-later.txt?h=v6.12.0",
+      "resolved_url": "https://code.qt.io/cgit/qt/qtbase.git/plain/LICENSES/LGPL-2.1-or-later.txt?h=v6.12.0",
+      "scope": "LGPL 2.1 text from Qt 6.12.0 official repository; Qt bundled FFmpeg reports LGPL 2.1 or later",
+      "retrieved_at": "2026-10-18T07:21:57.146377+00:00",
+      "bytes": 25906,
+      "sha256": "1ccf09bf2f598308df4bed9cd8e9657dc5cd0973d2800318f2e241486e2edf3f"
+    },
+    {
+      "file": "zstd-1.5.7/LICENSE",
+      "source_url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.7/LICENSE",
+      "resolved_url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.7/LICENSE",
+      "scope": "Native zstd 1.5.7 upstream dual-license original; binary matching remains release review",
+      "retrieved_at": "2026-10-20T08:08:09.095132+00:00",
+      "bytes": 1549,
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    {
+      "file": "zstd-1.5.7/COPYING",
+      "source_url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.7/COPYING",
+      "resolved_url": "https://raw.githubusercontent.com/facebook/zstd/v1.5.7/COPYING",
+      "scope": "Native zstd 1.5.7 upstream dual-license original; binary matching remains release review",
+      "retrieved_at": "2026-10-20T08:08:11.719685+00:00",
+      "bytes": 18091,
+      "sha256": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505"
+    }
+  ],
+  "errors": []
+}

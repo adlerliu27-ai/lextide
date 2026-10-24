@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "name": "Lextide",
+    "version": "1.0.0",
+    "scope": "concept UI handoff, not implemented app",
+    "fontMac": "-apple-system / SF Pro (platform-provided)",
+    "fontWindows": "Segoe UI Variable / Segoe UI",
+    "fontFallback": "Inter, Arial, sans-serif",
+    "layout": "desktop first; native macOS shell, adaptable Windows shell"
+  },
+  "color": {
+    "light": {
+      "canvas": "#F7F8FA",
+      "window": "#FFFFFF",
+      "surface": "#FFFFFF",
+      "sidebar": "#F5F7FA",
+      "textPrimary": "#192334",
+      "textSecondary": "#344257",
+      "textMuted": "#788396",
+      "border": "#E7EBF1",
+      "borderStrong": "#D9E1EA",
+      "accent": "#2478F4",
+      "accentHover": "#1466E5",
+      "accentSoft": "#EAF2FF",
+      "accentSurface": "#F4F8FF",
+      "success": "#2A976A",
+      "successSoft": "#E9F7F0",
+      "warning": "#B27A27",
+      "warningSoft": "#FFF6E7",
+      "error": "#D44F59",
+      "errorSoft": "#FFF0F0"
+    },
+    "dark": {
+      "canvas": "#101722",
+      "window": "#161E2B",
+      "surface": "#1D2736",
+      "sidebar": "#151E2B",
+      "textPrimary": "#EDF3FA",
+      "textSecondary": "#C3CEDC",
+      "textMuted": "#98A7BA",
+      "border": "#2C394A",
+      "borderStrong": "#3D4B5E",
+      "accent": "#5B9AF7",
+      "accentHover": "#78B0FF",
+      "accentSoft": "#1D3454",
+      "accentSurface": "#1A2C44",
+      "success": "#75CAAA",
+      "successSoft": "#193C31",
+      "warning": "#DCB77B",
+      "warningSoft": "#40311B",
+      "error": "#F19A9F",
+      "errorSoft": "#432629"
+    }
+  },
+  "type": {
+    "display": 32,
+    "pageTitle": 28,
+    "sectionHeading": 15,
+    "body": 13,
+    "control": 12,
+    "caption": 11,
+    "micro": 10,
+    "weights": {
+      "normal": 400,
+      "medium": 560,
+      "semibold": 680,
+      "bold": 735
+    }
+  },
+  "spacing": {
+    "base": 4,
+    "scale": [
+      4,
+      8,
+      12,
+      16,
+      20,
+      24,
+      32,
+      40,
+      48
+    ]
+  },
+  "geometry": {
+    "appMinWidth": 980,
+    "sideBarWidth": 222,
+    "topToolbarHeight": 62,
+    "bottomPlayerHeight": 78,
+    "controlHeight": 38,
+    "compactControlHeight": 32,
+    "radiusSmall": 8,
+    "radiusControl": 9,
+    "radiusCard": 13,
+    "radiusHero": 17,
+    "iconGrid": 24,
+    "iconDefault": 18
+  },
+  "motion": {
+    "hoverMs": 140,
+    "panelMs": 200,
+    "reducedMotion": "no animated transitions"
+  },
+  "interaction": {
+    "keyboardFocus": "visible focus outline; 2px primary or OS-native",
+    "hover": "subtle background only",
+    "primaryAction": "one high-emphasis button per scope",
+    "destructive": "confirmation required",
+    "network": "explicit consent before transmission",
+    "completion": "back-end verification only"
+  }
+}
