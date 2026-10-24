@@ -1,4 +1,4 @@
-# Lextide
+# Lextide <img src="src/lextide/desktop/assets/brand/lextide-symbol-editable.svg" width="48" height="48" alt="Lextide logo" />
 
 **A Text-to-Speech and Listening Studio.**
 
