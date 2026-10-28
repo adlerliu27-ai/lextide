@@ -1,8 +1,16 @@
-# G6.1 本地英文清理规则
+# 本地英文清理与 G9 上传前检查
 
 `lextide.cleaning.clean_english(text, *, mode="conservative")` 是无网络、无模型依赖的确定性过滤器。默认 `conservative` 保留 0.6.0 的 `english-rules-v1` 行为；显式 `remove_chinese_translations` 使用独立的 `english-translations-v1` 规则。输入上限为 **1 MiB UTF-8 字节**；非字符串、无效 Unicode、超限输入以及未知 mode 通过现有 `InputError` 拒绝。不会静默截断。
 
-Studio 的 `Original / English Only` 决定是否清理；选择 English Only 后，`Cleaning Mode / 清理模式` 可选 `Conservative / 保守` 或 `Remove Chinese Translations / 移除中文译文`。改变选项本身不改写稿件，点击应用才产生新候选。新稿覆盖人工编辑前须确认；最终须按 `Clean → Preview/Edit → Approve → Synthesize` 审阅，批准后不再次清理。
+0.9.0 Studio 只要求选择 `Keep Original / 保留原文` 或 `English Only / 仅英文`。选择 English Only 即调用已有增强规则，生成可编辑的本地预览，不再要求普通用户选择 Cleaning Mode。原文保持不变；新稿覆盖人工编辑前须确认，并保留撤销。底层 `conservative` 和 `remove_chinese_translations` API、规则版本及回归测试继续保留。最终顺序仍为 `Clean → Preview/Edit → Approve → Synthesize`，批准后不再次清理。
+
+## 上传前检查
+
+清理器保留歧义内容并不意味着这些内容已经适合英文声线。G9 在 GUI 和提交层检查**实际最终朗读稿**：空稿拒绝；English Only 请求或已知英文声线的稿件仍含中文时拒绝，并要求用户检查和编辑。检查只报告问题，不替用户删除中文专有名词，不修改正文或 SHA-256，也不先上传后检查。其他语种声线不能套用不分语种的全局禁中文规则；当前已配置的主要工作流是英文声线。
+
+用户在清理后手动修改正文、切换声线/引擎或 Auto 重新选择时，必须重新依据当前稿件和参数判断。一次批准仍只对应当前文本快照；基础规范化若改变了正文，需要展示后重新点击。旧任务和已经完成的音频、英文 SRT、manifest 不因新增检查而重写。
+
+清理删除的中文不会自动写入中文字幕。G7 的 TXT/SRT 导入、逐句人工确认与独立 sidecar 继续保留；清理规则不能证明译文与新 cue 的语义对应关系。本轮没有自动翻译、翻译网络请求或 OCR。
 
 返回 `CleanResult` dataclass，可通过 `dataclasses.asdict()` 序列化：
 

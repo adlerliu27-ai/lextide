@@ -45,11 +45,15 @@ def test_translated_display_preserves_internal_keys_and_user_content(window):
         window.show_page(name)
         assert window.breadcrumb_label.text() == tr(name)
         assert window.nav_buttons[name].text().strip() == tr(name)
-    assert [window.engine_combo.itemData(i) for i in range(2)] == ["edge-tts", "kokoro"]
+    assert [window.engine_combo.itemData(i) for i in range(window.engine_combo.count())] == [
+        "edge-tts",
+        "kokoro",
+        "auto",
+    ]
     assert [window.theme_combo.itemData(i) for i in range(3)] == ["system", "light", "dark"]
     assert [window.language_combo.itemData(i) for i in range(2)] == ["en", "zh_CN"]
     assert [window.clean_mode_combo.itemData(i) for i in range(2)] == ["original", "english"]
-    assert window.clean_button.text() == tr("Apply text preparation")
+    assert window.clean_button.text() == tr("Apply")
     assert window.clean_summary_label.wordWrap()
     assert window.language_hint.wordWrap()
     assert window.library_table.horizontalHeaderItem(1).text() == tr("Status")
@@ -63,9 +67,7 @@ def test_translated_display_preserves_internal_keys_and_user_content(window):
     window.set_transcript([{"text": "Settings 中文原文", "start_ms": 0}])
     assert window.transcript_list.item(0).text() == "00:00   Settings 中文原文"
     assert window.speech_edit.toPlainText() == "Keep 中文 and English exactly."
-    assert window.character_count_label.text() == tr(
-        "{count:,} characters · preview to calculate chunks", count=28
-    )
+    assert window.character_count_label.text() == tr("{count:,} characters", count=28)
 
 
 def test_transcript_choices_apply_real_pixels_and_relayout(window, app):
@@ -101,14 +103,17 @@ def test_large_mixed_transcript_reserves_space_for_last_wrapped_line(window, app
     window.show_page("Listen")
     window.set_transcript(
         [
-            {"text": "This is the next sentence. 这是下一句。", "start_ms": 5000},
+            {
+                "text": "This is the next sentence. 这是下一句。 " * 3,
+                "start_ms": 5000,
+            },
         ]
     )
     window.font_combo.setCurrentIndex(window.font_combo.findData(40))
     app.processEvents()
     item = window.transcript_list.visualItemRect(window.transcript_list.item(0))
-    # At the 980 px minimum window this mixed sentence uses three lines. Qt's
-    # default delegate previously truncated the third line behind item padding.
+    # The full-width G8 transcript still needs several wrapped lines for this
+    # longer mixed-script fixture. Reserve room beyond the third line's baseline.
     assert item.height() >= 3 * window.transcript_list.fontMetrics().height() + 36
 
 

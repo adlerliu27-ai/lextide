@@ -22,6 +22,8 @@ ROOT_FILES = {
     "pyproject.toml",
     "uv.lock",
     "LICENSE",
+    "TRADEMARKS.md",
+    "ASSETS_LICENSE.md",
 }
 SOURCE_ROOTS = {
     "src",
@@ -229,17 +231,24 @@ def prepare_snapshot(repo: Path, output: Path, *, allow_dirty: bool = False) -> 
 
     manifest = {
         "schema_version": 1,
-        "selection_policy": "g6-source-v2",
+        "selection_policy": "g7-source-v3",
         "source_commit": commit,
         "working_tree_dirty": dirty,
         "allow_dirty": allow_dirty,
         "publication_status": "BLOCKED",
         "github_source_release_readiness": "BLOCKED",
         "macos_binary_distribution_readiness": "PENDING",
-        "blockers": BLOCKERS + (["DIRTY_WORKTREE_LOCAL_AUDIT_ONLY"] if dirty else []),
+        "blockers": (
+            ["ENGINEERING_AND_USER_ACCEPTANCE_REQUIRED", *BLOCKERS[2:]]
+            if {"LICENSE", "TRADEMARKS.md", "ASSETS_LICENSE.md"} <= contents.keys()
+            else BLOCKERS
+        )
+        + (["DIRTY_WORKTREE_LOCAL_AUDIT_ONLY"] if dirty else []),
         "license_note": (
-            "The MIT candidate is not an effective project license. "
-            "Third-party and artwork terms remain separate."
+            "Project LICENSE and separate artwork policies are included. "
+            "Their presence is not approval to publish this new snapshot."
+            if {"LICENSE", "TRADEMARKS.md", "ASSETS_LICENSE.md"} <= contents.keys()
+            else "Source or asset license documents require review before publication."
         ),
         "history_included": False,
         "untracked_files_included": False,

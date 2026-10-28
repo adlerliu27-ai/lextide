@@ -16,6 +16,7 @@ from .audio import resolve_media_tools, validate_audio
 from .config import Settings
 from .engines.base import TTSEngine
 from .errors import StudioError, ValidationError
+from .reading import validate_reading_text
 from .subtitles import prepare_subtitles, validate_srt
 from .text import RULE_VERSION, PreparedText
 
@@ -67,6 +68,7 @@ async def synthesize_job(
         raise StudioError("ONLINE_NOT_AUTHORIZED", "缺少 --allow-online，未发送请求。", 3)
     if confirmed_sha256 != prepared.sha256:
         raise StudioError("TEXT_NOT_CONFIRMED", "确认指纹不匹配；请重新预览当前文本。", 3)
+    validate_reading_text(prepared.tts_text, settings)
     media_tools = resolve_media_tools(ffmpeg, ffprobe)
     stage = None
     try:

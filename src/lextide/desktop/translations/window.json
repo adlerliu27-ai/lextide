@@ -47,7 +47,7 @@
   "TXT / Markdown encoding. Auto never silently discards undecodable characters.": "TXT / Markdown 编码。自动检测不会静默丢弃无法解码的字符。",
   "No source yet · Import a file or paste your original text.": "尚无原文 · 请导入文件或粘贴原始文本。",
   "Original": "保留原文",
-  "English Only": "仅保留英文",
+  "English Only": "仅英文",
   "Text preparation mode": "文本处理模式",
   "Text preparation": "文本处理",
   "Apply text preparation": "应用文本处理",
@@ -210,5 +210,10 @@
   "Cleaning Mode": "清理模式",
   "Conservative": "保守",
   "Remove Chinese Translations": "移除中文译文",
-  "Enhanced mode can remove translations containing names or numbers. Review every result; uncertain text is kept.": "增强模式可移除含人名或数字的译文。请逐项核对结果；不确定的内容会保留。"
+  "Enhanced mode can remove translations containing names or numbers. Review every result; uncertain text is kept.": "增强模式可移除含人名或数字的译文。请逐项核对结果；不确定的内容会保留。",
+  "English + Chinese": "英文 + 中文",
+  "Subtitle display mode": "字幕显示模式",
+  "Import Chinese": "导入中文字幕",
+  "Edit selected Chinese": "编辑选中句译文",
+  "Open a verified session to import or edit Chinese subtitles.": "请打开已验证的听读项目，再导入或编辑中文字幕。"
 }

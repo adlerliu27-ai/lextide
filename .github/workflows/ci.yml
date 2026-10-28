@@ -45,4 +45,7 @@ jobs:
             tests/test_g5_packaging.py \
             tests/test_cleaning.py \
             tests/test_g61_cleaning.py \
+            tests/test_g7_bilingual.py \
+            tests/test_g8_engine_policy.py \
+            tests/test_g9_reading.py \
             tests/test_source_snapshot.py

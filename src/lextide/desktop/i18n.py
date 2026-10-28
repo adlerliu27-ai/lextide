@@ -1,12 +1,13 @@
 """Presentation-only translation. Backend requests and saved artifacts stay unchanged.
 
-English source strings are the fallback catalog. Select the language once, before
-constructing the window; a saved preference takes effect on the next launch.
+English source strings are the fallback catalog. TranslatedText retains the
+explicit UI source so existing controls can refresh without touching user data.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 from string import Formatter
 
@@ -64,10 +65,68 @@ def current_language() -> str:
     return _language
 
 
-def tr(source: str, **values: object) -> str:
+class TranslatedText(str):
+    """A normal rendered string with the source needed for a later UI refresh."""
+
+    def __new__(
+        cls,
+        source: str,
+        values: dict[str, object] | None = None,
+        *,
+        translate_source: bool = True,
+    ):
+        values = dict(values or {})
+        translated = (
+            _catalog.get(source, source) if translate_source and _language == "zh_CN" else source
+        )
+        rendered_values = {
+            key: value.render() if isinstance(value, TranslatedText) else value
+            for key, value in values.items()
+        }
+        rendered = translated.format(**rendered_values) if values else translated
+        result = super().__new__(cls, rendered)
+        result.source = source
+        result.values = values
+        result.translate_source = translate_source
+        return result
+
+    def render(self) -> str:
+        return str(tr(self))
+
+    def __add__(self, other):
+        if not isinstance(other, str):
+            return NotImplemented
+        return TranslatedText(
+            "{left}{right}", {"left": self, "right": other}, translate_source=False
+        )
+
+    def __radd__(self, other):
+        if not isinstance(other, str):
+            return NotImplemented
+        return TranslatedText(
+            "{left}{right}", {"left": other, "right": self}, translate_source=False
+        )
+
+
+def tr(source: str, **values: object) -> TranslatedText:
     """Only call with UI strings, never with speech text, cues or identifiers."""
-    translated = _catalog.get(source, source) if _language == "zh_CN" else source
-    return translated.format(**values) if values else translated
+    if isinstance(source, TranslatedText):
+        return TranslatedText(
+            source.source, source.values | values, translate_source=source.translate_source
+        )
+    return TranslatedText(source, values)
+
+
+def join_translated(separator: str, values: Iterable[str]) -> str:
+    """Join UI fragments, retaining only explicitly translated fragments as bindings."""
+    parts = tuple(values)
+    if not any(isinstance(part, TranslatedText) for part in parts):
+        return separator.join(parts)
+    # Place user text and separators only in values, never in a format/catalog key.
+    source = "{separator}".join("{" + f"part_{index}" + "}" for index in range(len(parts)))
+    fields = {f"part_{index}": part for index, part in enumerate(parts)}
+    fields["separator"] = str(separator)
+    return TranslatedText(source, fields, translate_source=False)
 
 
 def install_qt_translation(app) -> None:
@@ -78,6 +137,7 @@ def install_qt_translation(app) -> None:
     if old is not None:
         app.removeTranslator(old)
         app._lextide_translator = None
+        old.deleteLater()
     if _language != "zh_CN":
         return
     translator = QTranslator(app)

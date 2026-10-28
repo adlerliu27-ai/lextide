@@ -116,6 +116,31 @@ def test_existing_output_is_never_overwritten(repository, tmp_path):
         snapshot.prepare_snapshot(repository, link)
 
 
+def test_public_license_and_brand_terms_travel_together(repository, tmp_path):
+    for name in ("LICENSE", "ASSETS_LICENSE.md", "TRADEMARKS.md"):
+        (repository / name).write_text(f"Synthetic approved {name} fixture.\n")
+        git(repository, "add", name)
+    git(
+        repository,
+        "-c",
+        "user.name=Snapshot Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "public policy fixtures",
+    )
+    record = snapshot.prepare_snapshot(repository, tmp_path / "licensed-source")
+    assert {"LICENSE", "ASSETS_LICENSE.md", "TRADEMARKS.md"} <= {
+        row["path"] for row in record["files"]
+    }
+    assert record["publication_status"] == "BLOCKED"
+    assert "ENGINEERING_AND_USER_ACCEPTANCE_REQUIRED" in record["blockers"]
+    assert "FINAL_OWNER_PUBLICATION_APPROVAL_REQUIRED" in record["blockers"]
+    assert "SOURCE_LICENSE_OWNER_APPROVAL_REQUIRED" not in record["blockers"]
+    assert "not approval" in record["license_note"]
+
+
 def test_dirty_is_rejected_and_audit_never_adds_untracked(repository, tmp_path):
     (repository / "src/example.py").write_text("VALUE = 2\n")
     (repository / "src/untracked.py").write_text("LOCAL = True\n")

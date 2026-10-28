@@ -8,19 +8,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QTextCursor
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QDialog,
-    QDialogButtonBox,
-    QFileDialog,
-    QInputDialog,
-    QLabel,
-    QMessageBox,
-    QPlainTextEdit,
-    QVBoxLayout,
-)
+from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QInputDialog, QMessageBox, QVBoxLayout
 
-from .i18n import current_language, tr
+from ..config import Settings
+from ..errors import StudioError
+from ..reading import validate_reading_text
+from .bilingual_ui import BilingualController
+from .i18n import current_language, join_translated, tr
+from .localized import QCheckBox, QDialog, QLabel, QPlainTextEdit, bind_text
 from .messages import cleaning_reason, localize_error, localize_note
 from .player import LocalPlayer
 from .preferences import load_preferences, save_preferences
@@ -58,8 +53,8 @@ def confirm_transmission(parent, text: str, settings: dict, sha256: str) -> bool
     buttons = QDialogButtonBox(
         QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok
     )
-    buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Authorize and start"))
-    buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("Cancel"))
+    bind_text(buttons.button(QDialogButtonBox.StandardButton.Ok), tr("Authorize and start"))
+    bind_text(buttons.button(QDialogButtonBox.StandardButton.Cancel), tr("Cancel"))
     buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
     consent.toggled.connect(buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled)
     buttons.accepted.connect(dialog.accept)
@@ -88,11 +83,19 @@ class Controller(QObject):
         self.last_verified: dict | None = None
         self.closing = False
         self.confirming = False
+        self.auto_decision = None
+        self.auto_probe_revision = 0
+        self.pending_submission = None
+        self.pending_clean = None
+        self.settings_saved_snapshot = None
         self.poll_pending = False
         self.history_pending = False
         self.player = LocalPlayer(window)
+        self.bilingual = BilingualController(window, self.root)
         self._connect()
         self._restore_preferences()
+        self.settings_saved_snapshot = self._settings_values()
+        self._settings_dirty()
         self._invalidate()
         self.poll_timer = QTimer(self)
         self.poll_timer.setInterval(1500)
@@ -123,6 +126,7 @@ class Controller(QObject):
         w.preview_button.clicked.connect(self.prepare_preview)
         w.approval_check.toggled.connect(self._gate)
         w.generate_button.clicked.connect(self.generate)
+        w.cancel_generation_button.clicked.connect(self.cancel_preparation)
         w.undo_button.clicked.connect(w.speech_edit.undo)
         w.speech_edit.undoAvailable.connect(w.undo_button.setEnabled)
         w.undo_button.setEnabled(False)
@@ -130,10 +134,14 @@ class Controller(QObject):
         w.output_dir_button.clicked.connect(self.choose_output)
         w.settings_output_dir_button.clicked.connect(lambda: self.choose_output(settings=True))
         w.settings_save_button.clicked.connect(self.save_settings)
+        for control in (w.language_combo,):
+            control.currentIndexChanged.connect(self._settings_dirty)
+        for key in ("settings_output_dir", "model_dir", "offline_python", "ffmpeg", "ffprobe"):
+            getattr(w, f"{key}_edit").textChanged.connect(self._settings_dirty)
         w.font_combo.currentIndexChanged.connect(self._save_font_size)
+        w.subtitle_mode_combo.currentIndexChanged.connect(self._save_subtitle_mode)
         w.clean_button.clicked.connect(self.apply_cleaning)
         w.clean_mode_combo.currentIndexChanged.connect(self._cleaning_mode_changed)
-        w.cleaning_strength_combo.currentIndexChanged.connect(self._cleaning_mode_changed)
         w.model_refresh_button.clicked.connect(self.refresh_engines)
         w.library_refresh_button.clicked.connect(self.refresh_history)
         w.task_refresh_button.clicked.connect(self.refresh_history)
@@ -164,6 +172,9 @@ class Controller(QObject):
         w.font_combo.setCurrentIndex(
             w.font_combo.findData(self.preferences["transcript_font_size"])
         )
+        w.subtitle_mode_combo.setCurrentIndex(
+            w.subtitle_mode_combo.findData(self.preferences["subtitle_mode"])
+        )
         w.pause_spin.setValue(0)
         self._engine_changed()
 
@@ -181,6 +192,8 @@ class Controller(QObject):
 
     def _runtime_changed(self):
         self.capabilities.clear()
+        self.auto_decision = None
+        self.auto_probe_revision += 1
         self.w.model_status_label.setText(tr("Local paths changed. Check local status again."))
         self.w.media_status_label.setText(
             tr("Local paths changed. Check FFmpeg and ffprobe again.")
@@ -189,7 +202,7 @@ class Controller(QObject):
 
     def _settings(self):
         return {
-            "engine": self.w.engine_combo.currentData(),
+            "engine": self._effective_engine(),
             "voice": self.w.voice_combo.currentText().strip(),
             "rate": f"{self.w.rate_spin.value():+d}%",
             "timeout": 90,
@@ -204,6 +217,7 @@ class Controller(QObject):
                 "pause": self.w.pause_spin.value(),
                 "out_dir": self.w.output_dir_edit.text(),
                 "runtime": self._runtime(),
+                "english_only": self.w.clean_mode_combo.currentData() == "english",
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -211,6 +225,7 @@ class Controller(QObject):
 
     def _invalidate(self, *_):
         self.revision += 1
+        self.pending_clean = None
         self.preview = None
         self.preview_signature = None
         self.w.approval_check.setChecked(False)
@@ -218,25 +233,143 @@ class Controller(QObject):
         self.w.subtitle_edit.setPlainText(self.w.speech_edit.toPlainText())
         size = len(self.w.speech_edit.toPlainText().encode("utf-8"))
         self.w.studio_status_label.setText(
-            tr("Needs review · {size:,} UTF-8 bytes / 1 MiB", size=size)
+            tr("Review the final reading text") if size else tr("Add text to begin")
         )
         self._gate()
 
+    def _effective_engine(self):
+        strategy = self.w.engine_combo.currentData()
+        return (self.auto_decision or {}).get("engine") if strategy == "auto" else strategy
+
+    def _ready_to_generate(self):
+        engine = self._effective_engine()
+        if self.w.engine_combo.currentData() == "auto" and not (self.auto_decision or {}).get(
+            "ready"
+        ):
+            return False
+        if engine not in {"edge-tts", "kokoro"}:
+            return False
+        cap = self.capabilities.get(engine, {})
+        if cap.get("available") is False or (
+            engine == "kokoro" and cap.get("available") is not True
+        ):
+            return False
+        voices = cap.get("voices", [])
+        if engine == "kokoro" and voices and self.w.voice_combo.currentText() not in voices:
+            return False
+        if engine == "edge-tts" and not self.w.voice_combo.currentText().endswith("Neural"):
+            return False
+        low, high = cap.get("rate_range", [-50, 100])
+        return low <= self.w.rate_spin.value() <= high
+
     def _gate(self, *_):
-        self.w.generate_button.setEnabled(
-            self.preview is not None
-            and self.w.approval_check.isChecked()
-            and self.synthesis is None
-            and self.preview_signature == self._signature()
-            and self.capabilities.get(self.w.engine_combo.currentData(), {}).get("available")
-            is not False
-            and (
-                self.w.engine_combo.currentData() != "kokoro"
-                or self.capabilities.get("kokoro", {}).get("available") is True
+        engine = self._effective_engine()
+        online = engine == "edge-tts"
+        self.w.generate_button.setText(
+            tr("Send to Edge && Generate") if online else tr("Generate Audio")
+        )
+        self.w.online_notice.setText(
+            tr("This reading text will be sent to Microsoft Edge TTS.") if online else ""
+        )
+        self.w.online_notice.setVisible(online)
+        self.w.cancel_generation_button.setVisible(self.pending_submission is not None)
+        ready = self._ready_to_generate()
+        self.w.engine_settings_button.setVisible(not ready and engine != "edge-tts")
+        if self.w.engine_combo.currentData() == "auto":
+            reason = (self.auto_decision or {}).get(
+                "reason", "Checking engine availability without sending text…"
             )
+            if engine and (self.auto_decision or {}).get("ready") and not ready:
+                reason = (
+                    "Select a voice and rate compatible with the chosen engine. "
+                    "No settings were changed."
+                )
+        elif engine == "kokoro" and not ready:
+            reason = (
+                "Offline engine is not ready. Check Settings and select a "
+                "compatible voice and rate."
+            )
+        else:
+            reason = "Will use Edge online" if online else "Will use Kokoro offline"
+        self.w.engine_decision_status.setText(tr(reason))
+        issue = self._reading_issue()
+        if issue and self.w.speech_edit.toPlainText().strip():
+            self.w.studio_status_label.setText(tr(issue))
+        self.w.generate_button.setEnabled(
+            ready
+            and not issue
+            and bool(self.w.speech_edit.toPlainText().strip())
+            and self.synthesis is None
+            and not self.confirming
+            and not self.closing
+            and self.pending_clean is None
+        )
+        self.w.clean_button.setEnabled(
+            not self.closing
+            and not self.confirming
+            and not self.synthesis
+            and self.pending_clean is None
+        )
+
+    def _reading_issue(self):
+        """Check the visible final draft without changing it or starting a worker."""
+        try:
+            validate_reading_text(
+                self.w.speech_edit.toPlainText(),
+                Settings(**self._settings()),
+                english_only=self.w.clean_mode_combo.currentData() == "english",
+            )
+        except StudioError as error:
+            return str(error)
+        return None
+
+    def _probe_auto(self):
+        self.auto_probe_revision += 1
+        revision, runtime = self.auto_probe_revision, self._runtime()
+        self.auto_decision = None
+        self._invalidate()
+
+        def completed(data):
+            if (
+                self.closing
+                or revision != self.auto_probe_revision
+                or runtime != self._runtime()
+                or self.w.engine_combo.currentData() != "auto"
+            ):
+                return
+            self.auto_decision = data["decision"]
+            self.capabilities = {e["engine_id"]: e for e in data.get("engines", [])}
+            engine = self._effective_engine()
+            # Auto does not silently change the voice, rate, pause or filter.
+            current = self.w.voice_combo.currentText()
+            with QSignalBlocker(self.w.voice_combo):
+                self.w.voice_combo.clear()
+                self.w.voice_combo.addItems(self.capabilities.get(engine, {}).get("voices", []))
+                self.w.voice_combo.setCurrentText(current)
+            self.w.filter_check.setEnabled(engine == "kokoro")
+            self._invalidate()
+
+        def failed(_message):
+            if revision == self.auto_probe_revision:
+                self.auto_decision = {
+                    "engine": None,
+                    "reason": "Availability check failed. Choose an engine or retry.",
+                }
+                self._gate()
+
+        self._request(
+            {"command": "auto_probe", "runtime": runtime},
+            completed,
+            timeout=60_000,
+            on_error=failed,
         )
 
     def _engine_changed(self, *_):
+        self.auto_probe_revision += 1
+        if self.w.engine_combo.currentData() == "auto":
+            self._probe_auto()
+            return
+        self.auto_decision = None
         kokoro = self.w.engine_combo.currentData() == "kokoro"
         with QSignalBlocker(self.w.voice_combo):
             self.w.voice_combo.clear()
@@ -293,6 +426,8 @@ class Controller(QObject):
     def _confirm_replacement(self):
         if self.w.speech_edit.toPlainText() == self.w.source_edit.toPlainText():
             return True
+        if self.cleaning and self.w.speech_edit.toPlainText() == self.cleaning.get("cleaned_text"):
+            return True
         return (
             QMessageBox.question(
                 self.w,
@@ -307,16 +442,22 @@ class Controller(QObject):
         )
 
     def _cleaning_mode_changed(self, *_):
-        self.w.cleaning_strength_combo.setEnabled(
-            self.w.clean_mode_combo.currentData() == "english"
-        )
-        # No text changes until Apply is explicitly clicked. Also reject stale
-        # worker results and require a new review after a mode selection changes.
+        # Selection prepares a local preview, never a TTS request. Edits remain
+        # protected by the same replacement confirmation used by Apply/Reset.
         self._invalidate()
+        if self.w.source_edit.toPlainText().strip() or self.w.speech_edit.toPlainText().strip():
+            self.apply_cleaning()
+
+    def _cleaning_strength(self):
+        return (
+            "remove_chinese_translations"
+            if self.w.clean_mode_combo.currentData() == "english"
+            else "conservative"
+        )
 
     def apply_cleaning(self):
         # Preparation is an explicit local action, always before preview and consent.
-        if self.confirming or self.closing or self.synthesis:
+        if self.confirming or self.closing or self.synthesis or self.pending_clean is not None:
             return
         # Qt normalizes CRLF and paragraph separators for display. Keep the
         # importer/pasted-source snapshot exact for provenance and its hash.
@@ -329,19 +470,38 @@ class Controller(QObject):
         if self.w.source_edit.toPlainText() and not self._confirm_replacement():
             return
         mode = self.w.clean_mode_combo.currentData()
-        strength = self.w.cleaning_strength_combo.currentData()
+        strength = self._cleaning_strength()
+        self._invalidate()
         revision = self.revision
+        token = object()
+        self.pending_clean = token
         self.w.status_label.setText(tr("Preparing text locally. Nothing is sent online."))
+        self._gate()
+
+        def completed(data):
+            if self.pending_clean is not token or self.closing:
+                return
+            self.pending_clean = None
+            self._cleaned(data, revision, source, mode, strength)
+            self._gate()
+
+        def failed(message):
+            if self.pending_clean is token:
+                self.pending_clean = None
+                self._gate()
+                self._error(message)
+
         self._request(
             {"command": "clean", "text": source, "mode": mode, "cleaning_mode": strength},
-            lambda data: self._cleaned(data, revision, source, mode, strength),
+            completed,
+            on_error=failed,
         )
 
-    def _cleaned(self, data, revision, source, mode, strength="conservative"):
+    def _cleaned(self, data, revision, source, mode, strength="remove_chinese_translations"):
         if (
             revision != self.revision
             or mode != self.w.clean_mode_combo.currentData()
-            or strength != self.w.cleaning_strength_combo.currentData()
+            or strength != self._cleaning_strength()
         ):
             self._error(
                 tr(
@@ -366,22 +526,12 @@ class Controller(QObject):
         cursor.insertText(data["cleaned_text"])
         cursor.endEditBlock()
         self._invalidate()  # Also invalidates approval when the resulting text is identical.
+        removed = data.get("removed_chinese_segments", 0) or data["removed_chinese_lines"]
         summary = tr(
-            (
-                "Original: {original:,} characters · Prepared: {cleaned:,} · "
-                "Chinese lines removed: {removed} · Review warnings: {warnings}"
-            ),
-            original=len(source),
-            cleaned=len(data["cleaned_text"]),
-            removed=data["removed_chinese_lines"],
-            warnings=len(data["warnings"]),
+            "Removed {removed} Chinese passages · {count:,} characters to read",
+            removed=removed,
+            count=len(data["cleaned_text"]),
         )
-        if mode == "english" and strength == "remove_chinese_translations":
-            summary += "\n" + tr(
-                "Chinese translation segments removed: {count}. "
-                "Compare with the original before approving.",
-                count=data["removed_chinese_segments"],
-            )
         details = [
             tr(
                 "Line {line}: {reason}",
@@ -394,10 +544,21 @@ class Controller(QObject):
             details.append(
                 tr("No English speech text remains. Add or edit text before previewing.")
             )
-        self.w.clean_summary_label.setText(summary + ("\n" + "\n".join(details) if details else ""))
-        self.w.status_label.setText(
-            tr("Text preparation finished. Review and edit the full draft before approving it.")
+        self.w.clean_summary_label.setText(
+            tr(
+                "{summary} · Check the final reading text ({count} warnings)",
+                summary=summary,
+                count=len(details),
+            )
+            if details
+            else summary
         )
+        bind_text(
+            self.w.changes_edit,
+            join_translated("\n", details) or tr("No review warnings."),
+            setter="setPlainText",
+        )
+        self.w.status_label.setText(tr("Check the final reading text, then generate audio."))
 
     def _request(self, payload, callback=None, *, timeout=60_000, on_error=None):
         client = WorkerClient(payload, self.root / "requests", timeout_ms=timeout, parent=self)
@@ -460,15 +621,23 @@ class Controller(QObject):
         self.w.clean_summary_label.clear()
         self.w.source_edit.setPlainText(data["text"])
         self.w.speech_edit.setPlainText(data["text"])
-        self.w.source_path_label.setText(data.get("source_path", "Pasted text"))
+        self.w.source_path_label.setText(data.get("source_name") or tr("Pasted text"))
+        self.w.source_path_label.setToolTip(data.get("source_path", ""))
         self.w.title_edit.setText(data.get("source_name", tr("Untitled session")))
-        self.w.changes_edit.setPlainText(
-            "\n".join(localize_note(x) for x in data.get("changes", []) + data.get("warnings", []))
+        bind_text(
+            self.w.changes_edit,
+            join_translated(
+                "\n", (localize_note(x) for x in data.get("changes", []) + data.get("warnings", []))
+            ),
+            setter="setPlainText",
         )
         self.w.status_label.setText(
             tr("Extraction complete. The source file is unchanged; edit and preview the text.")
         )
         self.w.show_page("Studio")
+
+        if self.w.clean_mode_combo.currentData() == "english":
+            self.apply_cleaning()
 
     def paste_text(self):
         text, ok = QInputDialog.getMultiLineText(
@@ -531,8 +700,10 @@ class Controller(QObject):
                     "will be saved separately."
                 )
             )
-        self.w.changes_edit.setPlainText(
-            "\n".join(messages) or tr("No additional cleanup was applied.")
+        bind_text(
+            self.w.changes_edit,
+            join_translated("\n", messages) or tr("No additional cleanup was applied."),
+            setter="setPlainText",
         )
         self.w.studio_status_label.setText(
             tr(
@@ -559,35 +730,88 @@ class Controller(QObject):
         )
         self._gate()
 
+    def cancel_preparation(self):
+        # Invalidate the per-click snapshot; late local preview results cannot send text.
+        self.pending_submission = None
+        self.confirming = False
+        self.w.status_label.setText(tr("Preparation cancelled. No text was sent."))
+        self._gate()
+
     def generate(self):
+        """The explicit button click approves only the visible snapshot for this job."""
         if (
             self.closing
             or self.confirming
             or self.synthesis
-            or not self.preview
-            or self.preview_signature != self._signature()
+            or self.pending_clean is not None
+            or not self._ready_to_generate()
         ):
             return
-        if not self.w.approval_check.isChecked():
+        if self._reading_issue():
+            self._gate()
             return
-        preview = self.preview.copy()
-        signature = self.preview_signature
-        settings = self._settings()
-        allow_online = False
-        if settings["engine"] == "edge-tts":
-            self.confirming = True
-            try:
-                allow_online = confirm_transmission(
-                    self.w, preview["text"], settings, preview["sha256"]
-                )
-            finally:
+        text = self.w.speech_edit.toPlainText()
+        if not text.strip():
+            return
+        signature = self._signature()
+        snapshot = {
+            "text": text,
+            "settings": self._settings(),
+            "signature": signature,
+            "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "revision": self.revision,
+        }
+        self.pending_submission = snapshot
+        self.confirming = True
+        self.w.status_label.setText(tr("Preparing audio…"))
+        self._gate()
+
+        def failed(message):
+            if self.pending_submission is snapshot:
+                self.pending_submission = None
                 self.confirming = False
-            if not allow_online:
-                return
-        if self.closing or self.synthesis or signature != self._signature():
+                self._gate()
+                self._error(message)
+
+        self._request(
+            {
+                "command": "preview",
+                "text": text,
+                "settings": snapshot["settings"],
+                "pause_ms": self.w.pause_spin.value(),
+                "audio_filter": "on" if self.w.filter_check.isChecked() else "off",
+            },
+            lambda data: self._submit_prepared(data, snapshot),
+            on_error=failed,
+        )
+
+    def _submit_prepared(self, data, snapshot):
+        if self.pending_submission is not snapshot:
+            return
+        self.pending_submission = None
+        self.confirming = False
+        self._gate()
+        if (
+            self.closing
+            or self.synthesis
+            or snapshot["revision"] != self.revision
+            or snapshot["signature"] != self._signature()
+            or not self._ready_to_generate()
+            or self._reading_issue()
+        ):
+            self.w.status_label.setText(tr("The draft or settings changed. Click Generate again."))
+            return
+        if data.get("text") != snapshot["text"]:
+            # The backend's minimal preparation can normalize whitespace/control characters.
+            # Show that exact result before asking for another explicit send; never transmit it
+            # under consent for different bytes.
+            self.w.speech_edit.setPlainText(data["text"])
             self.w.status_label.setText(
-                tr("Reviewed content or task state changed. Review it again.")
+                tr("Text was normalized locally. Check it, then click Generate again.")
             )
+            return
+        if data.get("sha256") != snapshot["sha256"]:
+            self._error(tr("Reviewed text identity does not match. Nothing was sent."))
             return
         out_dir = self.w.output_dir_edit.text().strip()
         if not out_dir or not Path(out_dir).is_absolute():
@@ -596,15 +820,18 @@ class Controller(QObject):
         self.preferences["out_dir"] = out_dir
         if not self._remember_root(out_dir):
             return
+        self.preview = data
+        self.preview_signature = snapshot["signature"]
         self.active_title = self.w.title_edit.text()
         self.active_task = None
         self._start_synthesis(
             {
                 "command": "start",
-                "text": preview["text"],
-                "settings": settings,
-                "approved_sha256": preview["sha256"],
-                "allow_online": allow_online,
+                "text": snapshot["text"],
+                "settings": snapshot["settings"],
+                "approved_sha256": snapshot["sha256"],
+                "allow_online": snapshot["settings"]["engine"] == "edge-tts",
+                "english_only": self.w.clean_mode_combo.currentData() == "english",
                 "out_dir": out_dir,
                 "cache_dir": str(self.root / "chunk-cache"),
                 "audio_filter": "on" if self.w.filter_check.isChecked() else "off",
@@ -662,7 +889,7 @@ class Controller(QObject):
             return
         self._progress(data)
         if data.get("status") == "completed" and data.get("export_path"):
-            self.w.status_label.setText(tr("Task verified and saved locally."))
+            self.w.status_label.setText(tr("Audio is ready."))
             self._verify(data["export_path"], self.active_title)
         else:
             self.w.status_label.setText(
@@ -802,16 +1029,16 @@ class Controller(QObject):
         row = self._selected(self.w.library_table)
         if row:
             text = tr(
-                "Created: {created} · Source: {source}\n{path}",
+                "Created: {created} · Source: {source_label}\n{path}",
                 created=row.get("created_at") or tr("Unknown"),
-                source=Path(row["source_path"]).name
+                source_label=Path(row["source_path"]).name
                 if row.get("source_path")
                 else tr("Pasted text"),
                 path=row["path"],
             )
             tooltip = tr(
-                "Source: {source}\n{path}",
-                source=row.get("source_path") or tr("Pasted text"),
+                "Source: {source_label}\n{path}",
+                source_label=row.get("source_path") or tr("Pasted text"),
                 path=row["path"],
             )
         else:
@@ -869,9 +1096,10 @@ class Controller(QObject):
             return
         self.last_verified = data
         self.player.load(data, title)
+        self.bilingual.load(data)
         self.w.listen_open_button.setEnabled(True)
         self.w.show_page("Listen")
-        self.w.status_label.setText(tr("Output integrity verified. Ready for offline playback."))
+        self.w.status_label.setText(tr("Audio is ready."))
 
     def open_selected_folder(self):
         row = self._selected(self.w.library_table)
@@ -914,37 +1142,79 @@ class Controller(QObject):
         if path:
             edit.setText(path)
 
+    def _settings_values(self):
+        return {
+            "out_dir": self.w.settings_output_dir_edit.text().strip(),
+            "language": self.w.language_combo.currentData(),
+            **{
+                key: getattr(self.w, f"{key}_edit").text().strip()
+                for key in ("model_dir", "offline_python", "ffmpeg", "ffprobe")
+            },
+        }
+
+    def _settings_dirty(self, *_):
+        dirty = (
+            self.settings_saved_snapshot is not None
+            and self._settings_values() != self.settings_saved_snapshot
+        )
+        self.w.settings_save_button.setEnabled(dirty)
+        self.w.settings_save_status.setText(tr("Unsaved changes") if dirty else "")
+
     def save_settings(self):
-        out = self.w.settings_output_dir_edit.text().strip()
+        values = self._settings_values()
+        out = values["out_dir"]
         if not Path(out).is_absolute():
             self._error(tr("The output directory must be an absolute path."))
             return
-        self.preferences.update(
-            {
-                "out_dir": out,
-                "model_dir": self.w.model_dir_edit.text().strip(),
-                "offline_python": self.w.offline_python_edit.text().strip(),
-                "ffmpeg": self.w.ffmpeg_edit.text().strip(),
-                "ffprobe": self.w.ffprobe_edit.text().strip(),
-                "language": self.w.language_combo.currentData(),
-            }
-        )
-        self.w.output_dir_edit.setText(out)
-        if not self._remember_root(out):
-            return
-        if self.preferences["language"] != current_language():
-            self.w.status_label.setText(
-                tr(
-                    "Settings saved. Restart Lextide to apply the language; speech "
-                    "text and voice settings are unchanged."
+        updated = {**self.preferences, **values, "roots": list(self.preferences["roots"])}
+        if out not in updated["roots"]:
+            if len(updated["roots"]) >= 20:
+                self._error(
+                    tr(
+                        "At most 20 history folders can be saved. "
+                        "Use one existing collection folder."
+                    )
                 )
+                return
+            updated["roots"].append(out)
+        try:
+            save_preferences(self.root, updated)
+        except OSError:
+            self.w.settings_save_status.setText(tr("Save failed"))
+            self._error(
+                tr("Could not save local settings. Check disk space and folder permissions.")
             )
-            self.w.language_hint.setText(tr("Language saved. Restart Lextide to apply it."))
-        else:
-            self.w.status_label.setText(
-                tr("Local settings saved. Online permission is never saved.")
-            )
-        self.refresh_engines()
+            return
+        previous = self.settings_saved_snapshot or {}
+        self.preferences = updated
+        self.settings_saved_snapshot = values.copy()
+        if previous.get("out_dir") != out:
+            self.w.output_dir_edit.setText(out)
+        if values["language"] != current_language():
+            self.refresh_localized_text(values["language"])
+        self._settings_dirty()
+        self.w.settings_save_status.setText(tr("Settings saved"))
+        self.w.status_label.setText(tr("Settings saved"))
+        if any(
+            previous.get(k) != values[k]
+            for k in ("model_dir", "offline_python", "ffmpeg", "ffprobe")
+        ):
+            self.refresh_engines()
+
+    def refresh_localized_text(self, language):
+        from PySide6.QtWidgets import QApplication
+
+        from .i18n import configure_language, install_qt_translation
+        from .localized import retranslate_ui
+
+        configure_language(language)
+        install_qt_translation(QApplication.instance())
+        # Refresh the existing instances only; speech, selection, playback and task identity
+        # never enter the translation layer and no synthesis state is invalidated.
+        retranslate_ui(self.w)
+        self.bilingual._display()
+        self.w._update_character_count()
+        self._gate()
 
     def _save_theme(self):
         self.preferences["theme"] = self.w.theme_combo.currentData()
@@ -952,6 +1222,10 @@ class Controller(QObject):
 
     def _save_font_size(self):
         self.preferences["transcript_font_size"] = self.w.font_combo.currentData()
+        self._save_preferences()
+
+    def _save_subtitle_mode(self):
+        self.preferences["subtitle_mode"] = self.w.subtitle_mode_combo.currentData()
         self._save_preferences()
 
     def _save_preferences(self):
@@ -965,6 +1239,9 @@ class Controller(QObject):
             return False
 
     def refresh_engines(self):
+        if self.w.engine_combo.currentData() == "auto":
+            self._probe_auto()
+            return
         self.w.model_status_label.setText(
             tr("Checking capabilities and model integrity locally; no online requests…")
         )
@@ -988,7 +1265,7 @@ class Controller(QObject):
                 else tr("{name} · Not found. Choose an existing executable.", name=name)
             )
         self.w.media_status_label.setText(
-            "\n".join(media_lines)
+            join_translated("\n", media_lines)
             + tr("\nOnly executable paths are checked here. Audio is verified before playback.")
         )
         ready = (
@@ -1022,9 +1299,7 @@ class Controller(QObject):
                 )
             )
         else:
-            self.w.status_label.setText(
-                tr("FFmpeg and ffprobe found. Kokoro is optional; see its status in Settings.")
-            )
+            self.w.status_label.setText(tr("Ready"))
         # Capability discovery is not a synthesis health check.
         for engine in data.get("engines", []):
             if engine.get("engine_id") == self.w.engine_combo.currentData():
@@ -1041,6 +1316,8 @@ class Controller(QObject):
         if self.closing:
             return
         self.closing = True
+        self.pending_submission = None
+        self.confirming = False
         self.poll_timer.stop()
         self.player.media.stop()
         self.w.status_label.setText(tr("Saving and pausing tasks owned by this window…"))

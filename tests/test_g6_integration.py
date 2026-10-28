@@ -40,8 +40,22 @@ def desktop(request, tmp_path, monkeypatch):
     save_preferences(tmp_path, prefs)
     monkeypatch.setattr(controller.Controller, "refresh_history", lambda *_: None)
     monkeypatch.setattr(controller.Controller, "refresh_engines", lambda *_: None)
+    # Mode selection prepares immediately in G9. Never let a UI-only test
+    # implicitly approve replacement of an edited draft or block on a dialog.
+    monkeypatch.setattr(
+        controller.QMessageBox, "question", lambda *_: controller.QMessageBox.StandardButton.No
+    )
     w = MainWindow()
     c = controller.Controller(w, tmp_path)
+    c.test_requests = []
+    monkeypatch.setattr(
+        c,
+        "_request",
+        lambda payload, callback=None, **kw: c.test_requests.append((payload, callback)),
+    )
+    monkeypatch.setattr(
+        c, "_start_synthesis", lambda *_: pytest.fail("Unexpected synthesis in UI-only test")
+    )
     errors = []
     w.show_error = lambda title, message: errors.append(message)
     w.show()
@@ -65,6 +79,22 @@ def review(w, c, text="A quiet sentence for a local test."):
     return preview
 
 
+def complete_preparation(c, index=-1):
+    payload, callback = c.test_requests[index]
+    assert payload["command"] == "preview"
+    callback(service.preview(payload))
+
+
+def complete_cleaning(c, index=-1):
+    payload, callback = c.test_requests[index]
+    assert payload["command"] == "clean"
+    assert payload["cleaning_mode"] == "remove_chinese_translations"
+    data = asyncio.run(service.dispatch(payload))
+    callback(data)
+    assert c.pending_clean is None
+    return data
+
+
 def test_language_and_size_only_change_preferences(desktop):
     _, w, c, _ = desktop
     preview = review(w, c)
@@ -76,9 +106,9 @@ def test_language_and_size_only_change_preferences(desktop):
     )
     w.font_combo.setCurrentIndex(w.font_combo.findData(28))
     c.save_settings()
-    assert current_language() == language  # Restart-required; no partial live translation.
-    assert "Restart" in w.language_hint.text() or "重启" in w.language_hint.text()
-    assert load_preferences(c.root)["language"] != language
+    assert current_language() != language
+    assert current_language() == load_preferences(c.root)["language"]
+    assert w.nav_buttons["Studio"].text().strip() == tr("Studio")
     assert load_preferences(c.root)["transcript_font_size"] == 28
     assert c._signature() == signature and c._settings() == settings
     assert c.preview == preview and w.approval_check.isChecked()
@@ -129,18 +159,25 @@ def test_chinese_and_english_consent_dialog(desktop):
     assert observed == [True]
 
 
-def test_no_permission_no_start_and_edit_revokes(desktop, monkeypatch):
+def test_no_click_no_start_and_edit_revokes_pending_click(desktop, monkeypatch):
     _, w, c, _ = desktop
     review(w, c)
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: False)
-    c.generate()
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    assert not c.test_requests and calls == []
+    w.generate_button.click()
     assert calls == []
     w.speech_edit.insertPlainText("x")
     assert not w.approval_check.isChecked() and c.preview is None
-    c.generate()
+    complete_preparation(c)
     assert calls == []
+    assert c.pending_submission is None
+    w.generate_button.click()
+    complete_preparation(c)
+    assert len(calls) == 1
+    assert calls[0]["text"] == w.speech_edit.toPlainText()
+    assert calls[0]["approved_sha256"] == hashlib.sha256(calls[0]["text"].encode()).hexdigest()
 
 
 def test_clean_edit_preview_approved_snapshot(desktop, monkeypatch):
@@ -149,8 +186,7 @@ def test_clean_edit_preview_approved_snapshot(desktop, monkeypatch):
     w.source_edit.setPlainText(source)
     w.speech_edit.setPlainText(source)
     w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    data = asyncio.run(service.dispatch({"command": "clean", "mode": "english", "text": source}))
-    c._cleaned(data, c.revision, source, "english")
+    data = complete_cleaning(c)
     assert w.source_edit.toPlainText() == source
     assert "学习" not in w.speech_edit.toPlainText()
     assert c.preview is None and not w.approval_check.isChecked()
@@ -158,35 +194,38 @@ def test_clean_edit_preview_approved_snapshot(desktop, monkeypatch):
     reviewed = review(w, c, edited)
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: True)
-    c.generate()
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    w.generate_button.click()
+    assert not calls
+    complete_preparation(c)
     assert calls[0]["text"] == reviewed["text"] == edited
     assert calls[0]["approved_sha256"] == hashlib.sha256(edited.encode()).hexdigest()
     original, record = service._provenance(calls[0], edited)
     assert original == source
     assert record["text_preparation"]["cleaned_text"] == data["cleaned_text"]
-    assert record["text_preparation"]["version"] == "english-rules-v1"
+    assert record["text_preparation"]["version"] == "english-translations-v1"
     assert record["reviewed_sha256"] == calls[0]["approved_sha256"]
 
 
 @pytest.mark.parametrize("engine", ["edge-tts", "kokoro"])
-def test_enhanced_cleaning_is_explicit_and_reviewed(desktop, monkeypatch, engine):
+def test_english_only_selection_extracts_then_requires_review(desktop, monkeypatch, engine):
     _, w, c, _ = desktop
-    assert w.cleaning_strength_combo.currentData() == "conservative"
-    assert not w.cleaning_strength_combo.isEnabled()
-    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    assert w.cleaning_strength_combo.isEnabled()
-    w.cleaning_strength_combo.setCurrentIndex(1)
+    assert w.clean_mode_combo.currentData() == "original"
+    assert not hasattr(w, "cleaning_strength_combo")
     source = "In 1921, Lewis Terman began a study.1921年，Lewis Terman开展了一项研究。"
     w.source_edit.setPlainText(source)
     w.speech_edit.setPlainText(source)
 
-    def request(payload, callback):
+    def request(payload, callback, **_):
+        if payload["command"] == "preview":
+            c.test_requests.append((payload, callback))
+            return
         assert payload["cleaning_mode"] == "remove_chinese_translations"
         callback(asyncio.run(service.dispatch(payload)))
 
     monkeypatch.setattr(c, "_request", request)
-    c.apply_cleaning()
+    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
+    assert c.pending_clean is None
     assert w.source_edit.toPlainText() == source
     assert w.speech_edit.toPlainText() == "In 1921, Lewis Terman began a study."
     assert c.cleaning["cleaning_mode"] == "remove_chinese_translations"
@@ -197,8 +236,10 @@ def test_enhanced_cleaning_is_explicit_and_reviewed(desktop, monkeypatch, engine
     preview = review(w, c, edited)
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: True)
-    c.generate()
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    w.generate_button.click()
+    assert not calls
+    complete_preparation(c)
     assert calls[0]["text"] == edited == preview["text"]
     assert calls[0]["approved_sha256"] == hashlib.sha256(edited.encode()).hexdigest()
     assert calls[0]["allow_online"] is (engine == "edge-tts")
@@ -210,15 +251,23 @@ def test_enhanced_cleaning_is_explicit_and_reviewed(desktop, monkeypatch, engine
     assert preparation["reviewed_sha256"] == calls[0]["approved_sha256"]
 
 
-def test_changing_cleaning_strength_preserves_edits_and_revokes_approval(desktop):
+def test_changing_preparation_mode_preserves_edits_and_rejects_stale_result(desktop):
     _, w, c, errors = desktop
+    source = "Original sentence.原始句子。"
+    w.source_edit.setPlainText(source)
+    w.speech_edit.setPlainText(source)
     w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    preview = review(w, c)
+    assert c.pending_clean is not None
     revision = c.revision
-    w.cleaning_strength_combo.setCurrentIndex(1)
+    preview = review(w, c, "My important final edit.")
+    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("original"))
     assert w.speech_edit.toPlainText() == preview["text"]
     assert c.preview is None and not w.approval_check.isChecked()
-    c._cleaned({}, revision, "Old source", "english", "conservative")
+    data = complete_cleaning(c)
+    assert not errors and w.speech_edit.toPlainText() == preview["text"]
+    # Cancelled worker callbacks are discarded. The result handler itself must
+    # still reject a stale result if called directly (legacy boundary contract).
+    c._cleaned(data, revision, source, "english")
     assert errors and w.speech_edit.toPlainText() == preview["text"]
 
 
@@ -226,34 +275,21 @@ def test_enhanced_mode_does_not_overwrite_manual_edits_without_confirmation(desk
     _, w, c, _ = desktop
     w.source_edit.setPlainText("Original sentence.原始句子。")
     w.speech_edit.setPlainText("My carefully edited sentence.")
+    monkeypatch.setattr(c, "_request", lambda *_a, **_k: pytest.fail("Unexpected cleaner request"))
     w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    w.cleaning_strength_combo.setCurrentIndex(1)
-    monkeypatch.setattr(
-        controller.QMessageBox, "question", lambda *_: controller.QMessageBox.StandardButton.No
-    )
-    monkeypatch.setattr(c, "_request", lambda *_: pytest.fail("Unexpected cleaner request"))
     c.apply_cleaning()
     assert w.speech_edit.toPlainText() == "My carefully edited sentence."
 
 
-def test_enhanced_empty_result_is_blocked_and_labels_are_translated(desktop):
+def test_english_only_empty_result_is_blocked_and_label_is_translated(desktop):
     _, w, c, _ = desktop
-    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    w.cleaning_strength_combo.setCurrentIndex(1)
-    assert w.cleaning_strength_combo.currentText() == tr("Remove Chinese Translations")
-    assert w.cleaning_strength_combo.accessibleName() == tr("Cleaning Mode")
     source = "1921年，Lewis Terman开展了一项研究。"
-    data = asyncio.run(
-        service.dispatch(
-            {
-                "command": "clean",
-                "mode": "english",
-                "text": source,
-                "cleaning_mode": "remove_chinese_translations",
-            }
-        )
-    )
-    c._cleaned(data, c.revision, source, "english", "remove_chinese_translations")
+    w.source_edit.setPlainText(source)
+    w.speech_edit.setPlainText(source)
+    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
+    assert w.clean_mode_combo.currentText() == tr("English Only")
+    assert not hasattr(w, "cleaning_strength_combo")
+    complete_cleaning(c)
     assert w.speech_edit.toPlainText() == "" and not w.generate_button.isEnabled()
     with pytest.raises(StudioError):
         service.preview({"text": w.speech_edit.toPlainText()})
@@ -303,14 +339,14 @@ def test_preparation_preserves_exact_imported_original(desktop, monkeypatch):
     w.source_edit.setPlainText(original)
     w.speech_edit.setPlainText(original)
     assert w.source_edit.toPlainText() != original  # Qt normalizes line endings.
-    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
 
-    def request(payload, callback):
+    def request(payload, callback, **_):
         assert payload["text"] == original
         callback(asyncio.run(service.dispatch(payload)))
 
     monkeypatch.setattr(c, "_request", request)
-    c.apply_cleaning()
+    w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
+    assert c.pending_clean is None
     assert c.provenance["text"] == original
     sha = hashlib.sha256(original.encode()).hexdigest()
     assert c.cleaning["original_sha256"] == sha
@@ -324,11 +360,14 @@ def test_preparation_preserves_exact_imported_original(desktop, monkeypatch):
 def test_stale_cleaner_result_keeps_new_edit(desktop):
     _, w, c, errors = desktop
     source = "English text. 中文。"
+    w.source_edit.setPlainText(source)
     w.speech_edit.setPlainText(source)
-    revision = c.revision
     w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    data = asyncio.run(service.dispatch({"command": "clean", "mode": "english", "text": source}))
+    assert c.pending_clean is not None
+    revision = c.revision
     w.speech_edit.setPlainText("New edit.")
+    data = complete_cleaning(c)
+    assert w.speech_edit.toPlainText() == "New edit." and not errors
     c._cleaned(data, revision, source, "english")
     assert w.speech_edit.toPlainText() == "New edit." and errors
 
@@ -336,9 +375,10 @@ def test_stale_cleaner_result_keeps_new_edit(desktop):
 def test_empty_cleaning_cannot_preview_or_start(desktop):
     _, w, c, _ = desktop
     source = "只有中文。"
+    w.source_edit.setPlainText(source)
+    w.speech_edit.setPlainText(source)
     w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
-    data = asyncio.run(service.dispatch({"command": "clean", "mode": "english", "text": source}))
-    c._cleaned(data, c.revision, source, "english")
+    complete_cleaning(c)
     assert not w.generate_button.isEnabled()
     with pytest.raises(StudioError):
         service.preview({"text": w.speech_edit.toPlainText()})
@@ -354,7 +394,9 @@ def test_kokoro_receives_edited_text_without_online_consent(desktop, monkeypatch
     )
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    c.generate()
+    w.generate_button.click()
+    assert not calls
+    complete_preparation(c)
     assert calls[0]["allow_online"] is False
     assert calls[0]["text"] == preview["text"] and calls[0]["audio_filter"] == "on"
 

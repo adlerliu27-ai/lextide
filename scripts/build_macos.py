@@ -53,7 +53,8 @@ def runtime_distributions() -> list[str]:
 def prepare_licenses(staging: Path) -> list[dict]:
     destination = staging / "licenses"
     destination.mkdir()
-    shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", destination)
+    for notice in ("LICENSE", "ASSETS_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"):
+        shutil.copy2(ROOT / notice, destination)
     supplied = ROOT / "packaging/macos/licenses"
     if supplied.exists():
         shutil.copytree(supplied, destination / "supplemental")
@@ -153,6 +154,9 @@ def main() -> None:
         ROOT / "offline-runtime/pyproject.toml",
         ROOT / "offline-runtime/uv.lock",
         ROOT / "THIRD_PARTY_NOTICES.md",
+        ROOT / "LICENSE",
+        ROOT / "ASSETS_LICENSE.md",
+        ROOT / "TRADEMARKS.md",
     ]
     for folder in ("src/lextide", "packaging/macos", "scripts", "docs/release"):
         inputs.extend(

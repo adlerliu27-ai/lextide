@@ -2,6 +2,7 @@
 
 Every request runs in a disposable local worker. No engine is downloaded and
 no online request is made by discovery, preview, history or verification.
+The separate Auto probe checks endpoint reachability without document text.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from ..longform.media import LongEngine
 from ..longform.storage import atomic_json, read_json, safe_directory
 from ..longform.tasks import cancel_task, create_task, default_cache_dir, run_task, task_status
 from ..models import default_model_dir, model_status
+from ..reading import validate_reading_text
 from ..text import PreparedText
 
 EventSink = Callable[[dict], None]
@@ -336,8 +338,22 @@ async def start(request: dict, emit: EventSink) -> dict:
     audio_filter, pause_ms = _export_options(request)
     reviewed = _text(request.get("text"))
     prepared = prepare_document(text=reviewed)
+    # A caller must review the exact normalized text, not only supply its hash.
+    if reviewed != prepared.tts_text:
+        raise StudioError(
+            "TEXT_REVIEW_REQUIRED", "Review the current text again before starting or resuming.", 3
+        )
     allowed = _authorize(request, prepared.tts_text, settings.engine)
     original, provenance = _provenance(request, reviewed)
+    english_only = request.get("english_only", False)
+    if type(english_only) is not bool:
+        raise InputError("English Only must be a boolean.")
+    validate_reading_text(
+        prepared.tts_text,
+        settings,
+        english_only=english_only
+        or provenance.get("text_preparation", {}).get("mode") == "english",
+    )
     runtime = _runtime(request)
     engine = LongEngine(settings, **runtime)
     task = create_task(
@@ -378,6 +394,7 @@ async def resume(request: dict, emit: EventSink) -> dict:
                 "Resume uses the saved task settings. Create a new task to change them."
             )
     allowed = _authorize(request, current["review_text"], current["settings"]["engine"])
+    validate_reading_text(current["review_text"], Settings(**current["settings"]))
     task = _path(current["task_path"])
     expected_input = prepare_document(text=_read_text(task / "original.txt"))
     if expected_input.tts_text != current["review_text"]:
@@ -619,6 +636,27 @@ def engines(request: dict) -> dict:
     }
 
 
+async def auto_probe(request: dict) -> dict:
+    """Return verified local readiness and a separate, text-free Auto decision."""
+    from .engine_policy import probe_edge_reachability, resolve_engine
+
+    if set(request) - {"command", "runtime"}:
+        raise InputError("Auto connectivity checks accept only local runtime settings, never text.")
+    runtime = request.get("runtime", {})
+    if not isinstance(runtime, dict) or set(runtime) - {
+        "model_dir",
+        "offline_python",
+        "ffmpeg",
+        "ffprobe",
+    }:
+        raise InputError("Auto connectivity checks accept only local runtime paths.")
+    discovered = engines(request)
+    decision = resolve_engine("auto", discovered)
+    probe = await probe_edge_reachability() if decision["probe_required"] else None
+    decision = resolve_engine("auto", discovered, probe)
+    return {**discovered, **decision, "decision": decision, "edge_probe": probe}
+
+
 async def dispatch(request: dict, emit: EventSink | None = None) -> dict:
     if not isinstance(request, dict):
         raise InputError("Worker request must be an object.")
@@ -665,4 +703,6 @@ async def dispatch(request: dict, emit: EventSink | None = None) -> dict:
         return verify(request)
     if command == "engines":
         return engines(request)
+    if command == "auto_probe":
+        return await auto_probe(request)
     raise InputError("Unknown desktop worker command.")

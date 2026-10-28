@@ -28,7 +28,9 @@ uv run --no-sync --offline --python 3.13 python -m pytest \
   tests/test_models.py tests/test_subtitles.py tests/test_subtitles_edge_prefixes.py \
   tests/test_g61_quotes.py \
   tests/test_g3_document.py tests/test_g3_storage.py tests/test_g5_packaging.py \
-  tests/test_cleaning.py tests/test_g61_cleaning.py tests/test_source_snapshot.py
+  tests/test_cleaning.py tests/test_g61_cleaning.py \
+  tests/test_g7_bilingual.py tests/test_g8_engine_policy.py \
+  tests/test_g9_reading.py tests/test_source_snapshot.py
 ```
 
 Dependency installation uses the package registry. These tests then run without

@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "lextide"
 authors = [{ name = "Mingjia Liu", email = "mingjial@smu.edu" }]
 license = { text = "MIT" }
-version = "0.6.1"
+version = "0.9.0"
 description = "A Text-to-Speech and Listening Studio."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"

@@ -2,7 +2,7 @@
 
 这份指南面向能运行 Python、但尚不熟悉桌面项目的学习者。先追踪一份文本怎样变成任务，再学习函数、数据结构、Qt 事件、异步进程、接口和文件完整性。每一节都指向仓库中的真实实现；练习使用自写短句，避免直接调用在线合成或修改已有用户任务。
 
-本文的 Python 小例子已在 Mac 源码环境执行。它们证明本地函数的行为，不代表 Windows 已适配，也不代表真实语音生成或听音质量。Windows 的开发、构建和测试由另一台 Windows PC 独立进行；此源码候选没有 Windows 兼容性验收。
+本文的 Python 小例子已在 Mac 源码环境执行。0.6.1 是已公开且已验收的源码版本；当前 0.9.0 是 G9 稳定版候选，本文不声明它已完成独立验收或发布。这些例子证明本地函数的行为，不代表 Windows 已适配，也不代表真实语音生成或听音质量。Windows 的开发、构建和测试由另一台 Windows PC 独立进行；此源码候选没有 Windows 兼容性验收。
 
 ## 先准备阅读环境
 
@@ -63,15 +63,18 @@ print(enhanced.removed_chinese_segments)
 
 这里的学习重点是**先找到可审查的片段边界，再判断是否移除**，不能用整行中文占比直接删除混排行。数字和标点不计入辅助的字母占比；英文人名也不自动使整段变成英文。看 [test_g61_cleaning.py](../tests/test_g61_cleaning.py) 的 `test_explicit_translation_mode_preserves_complete_english_in_order` 和 `test_ambiguous_and_technical_content_is_not_deleted`，分别检查“中文移除”和“英文完整”两个要求。练习：增加一句含中文地名的英文正文，证明它会被保留并提示人工审核。
 
-GUI 的 `cleaning_strength_combo.currentData()` 使用稳定的模式 ID；显示标签可以翻译，ID 不翻译。`service.dispatch()` 接收 `cleaning_mode`，`service._provenance()` 保存模式与版本快照；缺少这个可选字段的旧记录按保守模式解释。启动任务时只保存已经审阅的文本，不重新执行清理。对照集成测试 `test_enhanced_cleaning_is_explicit_and_reviewed`，理解为什么规则选择、清理稿和最终人工修改稿需要分别记录。
+G9 把普通用户的选择缩为 `Keep Original / English Only`；English Only 使用上述增强规则，立即产生可编辑预览。底层算法仍接收稳定的模式 ID，显示标签可以翻译，ID 不翻译。`service.dispatch()` 接收 `cleaning_mode`，`service._provenance()` 保存模式与版本快照；缺少这个可选字段的旧记录按保守模式解释。启动任务时只保存已经审阅的文本，不重新执行清理。阅读 [test_g6_integration.py](../tests/test_g6_integration.py) 的文本来源与审核测试，理解为什么原文、清理稿和最终人工修改稿需要分别记录。
+
+再读 [reading.py](../src/lextide/reading.py) 的 `validate_reading_text()`：清理与校验是两个不同职责。前者生成候选稿，保留不能可靠判断的内容；后者在 English Only 或英文声线工作流中阻止仍含中文的稿件进入合成。它不改写文本、不猜中文名字的英文译法，也不发送网络请求。小练习：构造纯英文、英中对照、英文句中中文地名和非英文声线四种请求，观察哪些被拒绝；同时断言输入字符串和 SHA-256 没有变化。
 
 ## 第二阶段：追踪一个按钮，不急着阅读所有文件
 
 先读 [window.py](../src/lextide/desktop/window.py) 的 `MainWindow._studio_page()`，找到 `generate_button`。窗口创建控件，控制器接收事件，worker 执行耗时工作。
 
 ```text
-Generate audio 按钮
+Send to Edge & Generate / Generate Audio 按钮
   → controller.Controller.generate()
+  → 本地 preview worker，返回到 Controller._submit_prepared(data, snapshot)
   → controller.Controller._start_synthesis(payload)
   → desktop.process.WorkerClient / QProcess
   → desktop.worker.main() / service.dispatch()
@@ -81,9 +84,9 @@ Generate audio 按钮
 
 对应源码：[controller.py](../src/lextide/desktop/controller.py)、[process.py](../src/lextide/desktop/process.py)、[worker.py](../src/lextide/desktop/worker.py)、[service.py](../src/lextide/desktop/service.py)、[tasks.py](../src/lextide/longform/tasks.py)。
 
-`Controller.generate()` 先检查窗口是否正在关闭、是否已有任务、预览是否仍有效，以及审核勾选。它复制当前 preview，保存 signature，然后按引擎决定是否展示在线授权。对话框关闭后还会重新比较 signature：用户在对话框打开期间编辑了文本，也必须使旧授权失效。最后构造包含 `text`、`settings`、`approved_sha256`、`allow_online` 和本地输出目录的字典。
+G8 的 `Controller.generate()` 检查关闭状态、已有任务与引擎条件，然后直接捕获当前可见编辑器的文本、设置、signature、revision 和 SHA-256。这次明确点击只授权这个快照。本地 preview 返回后，`_submit_prepared()` 再核对快照身份、设置与文本；取消、编辑或重复回调不能沿用旧点击。基础规范化若改变文本，先把结果展示出来，等待用户再次明确点击。验证通过后才构造包含 `text`、`settings`、`approved_sha256`、`allow_online` 和本地输出目录的字典。
 
-小练习：在纸上画出 `generate()` 的所有 `return` 分支。分别写出“没有预览”“取消在线授权”“授权期间修改文本”“输出目录不是绝对路径”会在哪一步结束。对照 [test_desktop_gui.py](../tests/test_desktop_gui.py) 中 `test_online_dialog_nested_edit_rejects_stale_generation`；测试使用 monkeypatch 模拟授权期间编辑，并断言不会启动任务。
+小练习：一起画出 `generate()` 和 `_submit_prepared()` 的 `return` 分支，对照 [test_g8_generation.py](../tests/test_g8_generation.py) 的 `test_late_preview_cannot_reuse_old_click`、`test_duplicate_click_and_callback_are_consumed_once` 与 `test_local_normalization_requires_new_explicit_click`。再读 `_resume_ready()`：恢复在线任务仍通过 `confirm_transmission()` 展示任务自身的正文，并从未勾选开始；这里不能拿编辑器的另一份文本代替保存任务的审核对象。
 
 ## 第三阶段：理解预览、快照与异步任务
 
@@ -100,7 +103,7 @@ print({name: snapshot[name] for name in (
 
 本次实测为 `{'character_count': 23, 'sentence_count': 2, 'chunk_count': 1}`。查看返回的 `text` 与 `sha256`，理解“授权当前文本”为什么要绑定文本内容，而不能只存一个永久 `approved=True`。
 
-`service.start(request, emit)` 是 `async def`。它重新校验设置、实际朗读文本和批准哈希，建立任务，保存 `source-extracted.txt` 与 `document-review.json`，再等待 `_run()` 完成。不要把 `async` 理解成自动创建线程；这里 GUI 使用独立 QProcess，worker 内部再运行 asyncio。`emit` 是传入的函数，用于上报任务创建、进度和结果。
+`service.start(request, emit)` 是 `async def`。它重新校验设置、实际朗读文本与当前英文工作流约束、批准哈希，建立任务，保存 `source-extracted.txt` 与 `document-review.json`，再等待 `_run()` 完成。GUI 禁用按钮只是第一道提醒；提交层必须独立拒绝不合适的正文，不能相信旧回调或绕过 GUI 的请求。不要把 `async` 理解成自动创建线程；这里 GUI 使用独立 QProcess，worker 内部再运行 asyncio。`emit` 是传入的函数，用于上报任务创建、进度和结果。
 
 `service._authorize()` 对 Edge 要求本次明确的布尔 `allow_online=True`，同时检查文本哈希；Kokoro 不会因为这个字段而自动获得在线行为。G6 的文本处理记录保留清理快照，启动阶段不会在用户批准后悄悄重新执行另一遍英文清理。用户最终审阅后的文本才是合成输入。
 
@@ -120,9 +123,9 @@ for language in ("en", "zh_CN"):
 
 本次实测输出分别为 `1,234 characters · preview to calculate chunks` 和 `1,234 个字符 · 预览后计算分块`。`count` 仍是数字；语言更改只改变外层说明。
 
-在 `MainWindow` 中找 `PAGES`、`engine_combo`、`language_combo` 和 `_fill_table()`。`PAGES` 仍为 `Overview/Studio/Library/Listen/Tasks/Settings`；`engine_combo.currentData()` 仍返回 `edge-tts/kokoro`。中文显示使用 `tr()`，业务判断使用稳定值。用户标题、字幕原文、job ID、路径、manifest key 都不送入翻译函数。
+在 `MainWindow` 中找 `PAGES`、`engine_combo`、`language_combo` 和 `_fill_table()`。`PAGES` 仍为 `Overview/Studio/Library/Listen/Tasks/Settings`；`engine_combo.currentData()` 返回稳定的 `edge-tts/kokoro/auto`。中文显示使用 `tr()`，业务判断使用稳定值。用户标题、字幕原文、job ID、路径、manifest key 都不送入翻译函数。
 
-Settings 的语言选择保存到偏好，并提示重启。不要为实现即时翻译，顺带重建任务、改写字幕或更新历史 manifest。
+G8 的 `tr()` 返回 `TranslatedText(str)`，保留界面文案的 source 和格式化值。[localized.py](../src/lextide/desktop/localized.py) 的控件只登记明确传入的翻译对象，普通字符串会清除旧绑定。`Controller.save_settings()` 保存成功后调用 `refresh_localized_text()`：加载 catalog、替换 Qt 内置 translator、用 `retranslate_ui()` 刷新现有控件。组合提示使用 `join_translated()` 保留各片段身份；正文和路径只作为普通值。语言单独保存不重建播放器、重新加载音频或重新发现引擎。对照 [test_g8_i18n.py](../tests/test_g8_i18n.py)，检查来回切换后 combo data、光标、选区、cue 与控件实例仍相同。
 
 小练习：新建一条标题恰好为 `Settings` 的模拟历史记录。中文界面中，导航应显示“设置”，用户标题仍应为 `Settings`。现有 [test_g6_window.py](../tests/test_g6_window.py) 的 `test_translated_display_preserves_internal_keys_and_user_content` 就验证这个边界。
 
@@ -132,7 +135,7 @@ Settings 的语言选择保存到偏好，并提示重启。不要为实现即�
 
 `currentIndexChanged` 触发后，代码从 `currentData()` 取整数，交给 `_set_reader_font(pixels)`。它调用 `QFont.setPixelSize()`，并给字幕列表设置 `font-size: …px`；18 point 与 18 pixel 不是同一个单位。[preferences.py](../src/lextide/desktop/preferences.py) 的 `FONT_SIZES` 约束可持久化的合法字号，控制器负责保存偏好。
 
-`TranscriptDelegate.sizeHint()` 用实际 viewport 宽度和字体布局计算每行高度，保留已有主题 padding。只改变字体、不重算行高，会让大字号末行被截断。本次在 980×700 的窗口、40 px、三行中英字幕上，原 Qt delegate 行高为 140 px，低于所需的 177 px；修复后为 200 px，并通过实际滚动到底的 PNG 核验末行完整。
+`TranscriptDelegate.sizeHint()` 用实际 viewport 宽度和字体布局计算每行高度。当前类在 [bilingual_ui.py](../src/lextide/desktop/bilingual_ui.py)：英文与可选中文分开布局，再加上间距与上下留白；`window.py` 导入同一个类。只改变字体、不重算行高，会让大字号末行被截断。G6 的历史修复记录来自 980×700 窗口、40 px、三行中英文本：原 Qt delegate 行高 140 px，低于所需 177 px，修复后为 200 px；这些旧数值不能当成 G7 新双语布局的测量结果。
 
 小练习：在本地 UI 切到 12、18、40 px，缩窄窗口后滚动到长句末尾。查看 [test_g6_window.py](../tests/test_g6_window.py) 的 `test_large_mixed_transcript_reserves_space_for_last_wrapped_line`。能够选择 40 只是控件行为；文本完整显示还需要布局证据。UI 布局的调整不应改写 `player.cue_at()`、SRT 时基或音频速度。
 
@@ -195,9 +198,93 @@ Git 分阶段记录你的思路：
 小练习的验收应能回答：改动触发条件是什么；前后行为如何；哪项测试能在改动前失败、改动后通过；没有做哪些平台或真实服务验证。本次 G6 UI 的独立 `test_g6_window.py` 已实测 14 项通过，ruff 对 window/player/该测试通过；这些数字只对应本次 UI 验证，不替代项目整体发布验收。
 
 
+## 第九阶段：G7 怎样增加中文而不改英文时间轴
+
+先读 [中文字幕操作说明](BILINGUAL_SUBTITLES.md)，再把功能拆成三个边界：已验证英文、独立中文附加文件、界面显示。界面语言 `language` 与字幕模式 `subtitle_mode` 是不同偏好；`english` 是后者默认值，`bilingual` 只决定是否显示已有中文。
+
+| 真实入口 | 读取时要回答的问题 |
+|---|---|
+| [bilingual.py](../src/lextide/desktop/bilingual.py) 的 `SubtitleSource.from_verified()` | 为什么要重新读 SRT，并把其解析结果与已经验证的 cue 列表比较？ |
+| `SubtitleSource.assert_current()` | 为什么仅改 SRT 换行、字节或空格，也要阻止沿用旧附件身份？ |
+| `import_translation(path, source)` | SRT 如何精确比对编号、数量与时间？TXT 为什么只能证明物理行对应，不能证明语义正确？ |
+| `validate_translation_text(value)` | 字符串类型、空白、控制字符与 UTF-8 字节上限分别保护什么边界？ |
+| `TranslationStore.load()` / `save()` / `current_revision()` | 原英文 SHA、cue 身份和独立 JSON 当前版本如何共同防止串错附件或覆盖别人刚保存的修改？ |
+| [bilingual_ui.py](../src/lextide/desktop/bilingual_ui.py) 的 `TranslationPreviewDialog` | 为什么要列出全部英文与中文，并让确认框每次从未勾选开始？ |
+| `TranslationEditDialog` / `BilingualController.edit_selected()` | 为什么英文只读、中文可编辑，而未填写的其他 cue 继续用 `None` 表示？ |
+| `TranscriptDelegate` / `CHINESE_ROLE` | 为什么中文放进单独 item role，而不把它拼回英文 cue 文本？ |
+
+`SubtitleSource` 是冻结 dataclass，cue 又被复制为只读映射；UI 后续改动传入列表不会改变已捕获的来源。`TranslationDocument` 保存与每条英文对齐的 `texts` 和当前附加文件 `revision`。`save()` 需要显式传入 `expected_revision` 与 `origin`：首次写入用 `None` 表示“我看到没有旧文件”，后续编辑使用实际读到的指纹。不能为绕过冲突直接读取新指纹、再把旧内容写下去；应重新打开并让人检查最新内容。
+
+实际导入调用链为：
+
+```text
+Listen → Import Chinese
+  → BilingualController.import_file()
+  → TranslationStore.current_revision() + import_translation()
+  → TranslationPreviewDialog：完整对应预览、默认未勾选确认框
+  → 用户确认并保存
+  → TranslationStore.save(expected_revision=..., origin=...)
+  → BilingualController._display() / MainWindow.set_chinese_translations()
+```
+
+这条链不调用语音合成。`Controller._save_subtitle_mode()` 只保存显示偏好；原播放器 `cue_at()` 和 `LocalPlayer.seek_cue()` 继续使用英文时间轴。`TranscriptDelegate.chinese_font()` 将中文设为英文字号约 80%，`sizeHint()` 与 `paint()` 使用相同文字布局；长句和 40 px 需要同时检查测量与实际绘图。
+
+先运行一个无文件、无网络的小例子：
+
+```python
+from lextide.desktop.bilingual import validate_translation_text
+from lextide.errors import ValidationError
+
+print(validate_translation_text("安静的清晨。"))
+print(validate_translation_text("Maya counted 1,500 birds."))
+try:
+    validate_translation_text("   ")
+except ValidationError as error:
+    print(type(error).__name__)
+```
+
+本次在项目 `.venv/bin/python` 的实际输出为：
+
+```text
+安静的清晨。
+Maya counted 1,500 birds.
+ValidationError
+```
+
+第二行也被接受，因为该函数只验证合法文字，不声称检测了中文或翻译正确性。对照 [test_g7_bilingual.py](../tests/test_g7_bilingual.py) 的 `test_txt_semantic_order_is_not_claimed_to_be_verified`：把两行语义交换但保持行数，结构检查无法辨认，必须由完整预览后的人工确认补上。不要在教材里把“文件通过格式校验”写成“翻译准确”。
+
+再阅读同文件的 `test_save_load_records_hashes_timing_and_partial_manual_edit`、`test_stale_revision_cannot_overwrite_current_translation`、`test_source_byte_change_rejects_load_import_and_save`、`test_failed_atomic_replace_preserves_previous_file`，分别理解部分译文、乐观版本检查、来源变化和原子替换。使用 `tmp_path` 或专用学习目录练习；原 MP3、SRT 与任务 manifest 始终只读。可以运行以下离线存储测试，结果以你当次输出为准：
+
+```sh
+python -m pytest tests/test_g7_bilingual.py --basetemp "$LEXTIDE_LEARNING_DIR/pytest-g7-bilingual"
+```
+
+GUI 契约见 [test_g7_gui.py](../tests/test_g7_gui.py)：它使用 Qt 和本地测试替身，检查确认与取消、逐句编辑、显示偏好、旧文件保护和双语行高；不包含真实音频播放或用户听音验收。
+
+附加文件存在不代表可加载。JSON 损坏或 cue 身份不符时，GUI 显示警告并保留英文播放，禁止在未知旧内容上逐句编辑；完整重新导入仍须人工确认，保存还要检查从预览起是否有人改动旧文件。这是可恢复失败，不是把损坏记录默默当成新文件。
+
+## 第十阶段：G8 怎样把引擎选择与实际生成分开
+
+先读 [G8 交互说明](G8_UX.md)，再读 [engine_policy.py](../src/lextide/desktop/engine_policy.py) 的 `resolve_engine()`。它只接收引擎选项、已有发现结果和可选探测结果，返回包含 `engine`、`ready`、`reason_code`、`probe_required` 的字典，不在函数内部执行 I/O，也不修改输入。`ready` 只说明运行前提，不代替声线、语速、正文审核与在线授权检查。
+
+`probe_edge_reachability()` 才执行异步 I/O：调用 `edge_tts.list_voices()`，不接收文档正文。查看其整体超时、TLS connector 与异常分支，区分“能取得声线列表”“本地环境准备完毕”和“这次合成成功”。三者不是同一个布尔值。`service.auto_probe()` 在 worker 边界拒绝无关请求字段，然后把发现和探测证据交给纯策略函数；`Controller._probe_auto()` 用 revision 丢弃过期回调。
+
+小练习：读 [test_g8_engine_policy.py](../tests/test_g8_engine_policy.py) 的 `discovery()`、`test_auto_prefers_reachable_edge`、`test_auto_selects_kokoro_only_after_failed_probe` 与 `test_policy_never_mutates_discovery_or_invents_voice_rate`，画出选择表。再对照 [test_g8_generation.py](../tests/test_g8_generation.py) 的 `test_auto_requires_explicit_compatible_voice_selection`：策略选中了 Kokoro，为什么 UI 仍可能禁止生成？当前声线属于 Edge 时，程序保留原值，必须由用户主动选择兼容声线。
+
+运行时引擎失败不进入 Auto 重新选择。复用 G5/G6 的身份与完整性检查，不等于复用上一次点击的授权。可以只运行不含 GUI 的策略测试，再单独运行有 Qt 的交互测试：
+
+```sh
+python -m pytest tests/test_g8_engine_policy.py --basetemp "$LEXTIDE_LEARNING_DIR/pytest-g8-policy"
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_g8_generation.py tests/test_g8_i18n.py tests/test_g8_layout.py --basetemp "$LEXTIDE_LEARNING_DIR/pytest-g8-gui"
+```
+
+`window.disclosure()` 用 checkable `QToolButton` 控制次要面板的可见性；它不销毁 panel。与 `retranslate_ui()` 放在一起阅读，理解“只更新展示”如何保留同一对象的正文、选择和播放器状态。`test_language_save_preserves_pending_consent_and_editor` 检查语言单独保存不会把尚未返回的点击快照作废；若正文或有关设置发生变化，前述快照检查仍然生效。
+
+本地运行时还要分清应用代码与数据目录。`preferences.default_data_dir()` 给出默认目录，`load_preferences(root)` 从指定 root 读取 Library 根目录和其他偏好。使用另一个 `--data-dir` 打开空 Library，不代表先前导出被删除；这正是 `OBS-G7-4` 的目录边界。不要为了让两个测试窗口看起来相同而复制或覆盖真实用户数据。
+
 ## 私有开发历史怎样对应阶段
 
-首次公开源码将从已核验的 0.6.1 快照建立干净 Git 历史，首版只有一个 initial commit。以下短 commit 是所有者保留的 G1–G6 内部开发记录，方便在私有仓库用 `git show` 学习；它们不是公开仓库的提交，不能用来检出公开版本。公开读者应按本指南的真实文件、函数和测试名称阅读当前实现。
+首次公开源码 0.6.1 已从核验快照建立干净 Git 历史，首版为独立的 initial commit。以下短 commit 是所有者保留的 G1–G6 内部开发记录，方便在私有仓库用 `git show` 学习；它们不是公开仓库的提交，不能用来检出公开版本。公开读者应按本指南的真实文件、函数和测试名称阅读当前实现。
 
 | 阶段 | 本机开发记录 | 阅读重点 |
 |---|---|---|
@@ -207,6 +294,8 @@ Git 分阶段记录你的思路：
 | G3 | `3d72604` | 分块、缓存键、任务恢复与全局时间轴 |
 | G4 | `9408b68` | 原生 GUI、导入、预览、独立 worker |
 | G5 | `ab0f961`、`251f06f`、`26cb2e3` | macOS 打包和 Edge 句首标记的精准修复 |
-| G6 | `34e11eb`、`cdb722f`、`1f4d1e7`；当前源码版本 0.6.1 | 界面翻译、字号偏好、本地清理；0.6.1 的引号边界修复与显式增强清理已通过工程复测和用户验收 |
+| G6 | `34e11eb`、`cdb722f`、`1f4d1e7`；已验收版本 0.6.1 | 界面翻译、字号偏好、本地清理；0.6.1 的引号边界修复与显式增强清理已通过工程复测和用户验收 |
+| G7 | 0.7.0 本地开发，未在此声明提交或发布 commit | 独立中文字幕附件、精确来源绑定、人工映射审核、逐句编辑；独立验证与用户验收待完成 |
+| G8 | 0.8.0 本地开发，未在此声明提交或发布 commit | 一次点击的文本快照、显式 Auto 策略、原地语言刷新与次要信息折叠；不表示已完成用户验收或公开发布 |
 
 练习：在保留的私有仓库用 `git show --stat 251f06f` 看清一次小修复涉及哪些文件；在公开快照用测试名称追踪同一行为。不要为了复制学习历史而直接发布含私人路径的旧仓库。

@@ -19,6 +19,7 @@ from ..audio import resolve_media_tools
 from ..config import Settings
 from ..errors import InputError, StudioError, ValidationError
 from ..jobs import ARTIFACT_NAMES, _validate_model_record
+from ..reading import validate_reading_text
 from ..text import PreparedText
 from .document import TEXT_RULE_VERSION, chunk_document
 from .media import (
@@ -180,6 +181,7 @@ def create_task(
     pause_ms: int = 0,
 ) -> Path:
     settings.validate()
+    validate_reading_text(prepared.tts_text, settings)
     if audio_filter not in {"on", "off"} or type(pause_ms) is not int or not 0 <= pause_ms <= 2000:
         raise InputError("filter 为 on/off，块间停顿必须为 0–2000ms 整数。")
     out_dir = safe_directory(out_dir, create=True)
@@ -427,6 +429,7 @@ async def run_task(
             raise StudioError(
                 "ONLINE_NOT_AUTHORIZED", "恢复在线任务也必须提供本次 --allow-online。", 3
             )
+        validate_reading_text(_read_text(task / "tts.txt", ARTIFACT_LIMITS["tts.txt"]), settings)
         if expected_input is not None:
             import hashlib
 

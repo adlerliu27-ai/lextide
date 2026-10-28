@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from ..reading import CHINESE_TEXT_MESSAGE, EMPTY_TEXT_MESSAGE
 from .i18n import tr
 
 # Backend messages are intentionally unchanged; these aliases only affect display.
@@ -186,6 +187,8 @@ def localize_error(message: str) -> str:
     code, separator, detail = message.partition(": ")
     if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]+", code):
         return message  # Controller-owned messages already passed through tr().
+    if code == "INVALID_INPUT" and detail in (CHINESE_TEXT_MESSAGE, EMPTY_TEXT_MESSAGE):
+        return code + ": " + tr(detail)
     # Preserve G5's numeric location and reason without echoing private speech text.
     match = re.match(
         (

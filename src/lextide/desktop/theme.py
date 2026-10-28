@@ -157,7 +157,9 @@ def stylesheet(c: dict[str, str]) -> str:
             }
         QFrame#Hero { background: ${tint}; border: 1px solid ${line}; border-radius: 17px; }
         QFrame#Review { background: ${tint}; border: 1px solid ${line}; border-radius: 12px; }
-        QFrame#Approval { background: ${surface}; border-top: 1px solid ${line}; }
+        QFrame#Approval, QFrame#SettingsFooter {
+            background: ${surface}; border-top: 1px solid ${line};
+        }
         QLabel { background: transparent; border: none; }
         QLabel#OverviewBrand { border: 1px solid ${line}; border-radius: 71px; }
         QLabel[role="muted"] { color: ${muted}; font-size: 12px; }
@@ -199,6 +201,15 @@ def stylesheet(c: dict[str, str]) -> str:
         QPushButton[primary="true"]:pressed { background: ${accent}; }
         QPushButton[quiet="true"] { background: transparent; border-color: transparent; }
         QPushButton[quiet="true"]:hover { background: ${hover}; }
+        QToolButton#Disclosure {
+            background: transparent;
+            border-color: transparent;
+            text-align: left;
+            padding: 2px 4px;
+            font-weight: 600;
+        }
+        QToolButton#Disclosure:hover { background: ${hover}; }
+        QToolButton#Disclosure:focus { border-color: ${accent}; }
         QPushButton#NavButton {
             background: transparent;
             color: ${muted};

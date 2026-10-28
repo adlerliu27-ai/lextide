@@ -1,0 +1,9 @@
+{
+  "Chinese text remains in the reading text. Choose English Only and review or edit the preview before generating. No text was sent.": "朗读稿中仍有中文。请选择「仅英文」，并检查或编辑预览后再生成。尚未发送任何正文。",
+  "Reading text is empty. Enter or extract English text before generating.": "朗读稿为空。请输入或提取英文后再生成。",
+  "Apply": "应用",
+  "Open a session from Library": "从资料库打开一个学习记录",
+  "Open Library": "打开资料库",
+  "Exit focus view": "退出专注模式",
+  "English Only prepares a local preview immediately. Review retained uncertain passages before generating.": "选择「仅英文」后立即生成本地预览。生成音频前，请检查保留的疑似混排内容。"
+}

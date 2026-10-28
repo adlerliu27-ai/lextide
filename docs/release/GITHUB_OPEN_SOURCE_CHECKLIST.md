@@ -1,107 +1,80 @@
-# Lextide v0.6.1 源码首发检查清单
+# Lextide 0.9.0 源码发布检查清单
 
-更新：2026-10-24。G6 工程和用户验收已完成：**G6_PASS / USER_ACCEPTED**；
-BUG-G6-1、BUG-G6-2 均 CLOSED。已验收业务基线为
-`1f4d1e7a083d6134165bdbecd1f316bf77a4a0cd`。本轮只整理发布文档、资产清单和隐私配置，
-不修改业务源码、测试、依赖锁或 CI，不生成新的 App。
+当前目标是 **`G9_STABLE_RELEASE_CANDIDATE`**。源码候选、独立验收通过、GitHub 实际发布是三个不同状态。G9 尚未完成 DeepSeek 独立验收和用户最终确认；不得据本清单宣称 `G9_PASS` 或 `PUBLIC_RELEASE_PASS`。
 
-**源码工程检查、权利放行、实际 GitHub 发布是三种不同状态。**
+2026-10-26 通过只读 GitHub 接口核对：公开 `main` 为
+`3cd6c781e860100555792bb738e65d72fabfb67c`；已发布 `v0.6.1` 指向
+`341f457591dae91d083cc14b0836c6f00335cbf9`。README 顶部保留官方透明 SVG 的 64 px Logo。
+发布执行时必须重新读取远端状态，不能假设 main 此后没有变化。
 
-- `github_source_release_readyness`：**READY** —— 所有者已批准 MIT 源码许可与品牌资源条款
-  （`LICENSE`、`TRADEMARKS.md`、`ASSETS_LICENSE.md`），资产范围见
-  [ASSET_RELEASE_MANIFEST.md](ASSET_RELEASE_MANIFEST.md)。
-- `macos_binary_distribution_readiness`：**PENDING** —— 未签名、未公证，本仓库不含 App。
+## 1. 已确认授权与待完成门槛
 
-本仓库由独立干净快照建立新的初始历史，不包含原私有开发历史。发布后的核对结果保存在
-开发侧的发布结果报告中，不写入本公开仓库。
+| 项目 | 状态与范围 |
+|---|---|
+| 自有源码 | **APPROVED**：MIT，`Copyright (c) 2026 Mingjia Liu`；以根目录 `LICENSE` 为准 |
+| 品牌与图形 | **APPROVED**：遵循 `TRADEMARKS.md`、`ASSETS_LICENSE.md` 和 [资产清单](ASSET_RELEASE_MANIFEST.md)，不扩大既有授权 |
+| 0.9.0 源码发布意愿 | **CONDITIONALLY AUTHORIZED**：用户已授权在独立工程验收、真实用户验收和安全门槛全部通过后，由 DeepSeek 执行 |
+| G9 工程与用户验收 | **PENDING**：须有真实结果，不能以单元测试替代用户验收 |
+| 最终源码候选审计 | **PENDING PER CANDIDATE**：对最终 commit、ZIP、清单和 SHA-256 逐次核对 |
+| macOS 二进制分发 | **PENDING**：开发版是 ad-hoc，未完成 Developer ID、公证和适用的二进制分发审查；本次公开目标为源码 |
 
-## 1. 四项必须由所有者确认的内容
+发布条件为 `engineering_status = PASS`、`manual_acceptance_status = USER_ACCEPTED`、
+`github_release_readiness = READY` 同时成立。已批准的源码许可与阶段发布意愿无须重复询问；
+实际登录仍必须使用正常的账号授权流程。P0/P1、未授权上传、敏感信息、数据损坏或第三方权利问题必须阻止发布。
 
-| 项目 | 当前状态 | 已确定的决定 |
-|---|---|---|
-| 自有代码许可与版权 | **APPROVED** | 采用 MIT；`Copyright (c) 2026 Mingjia Liu`；范围见根目录 `LICENSE` |
-| 图形/品牌/截图 | **APPROVED** | 源码 MIT + 品牌权利保留 + 非商业教育引用许可；商业品牌使用需事先书面授权。逐文件分类见 [ASSET_RELEASE_MANIFEST.md](ASSET_RELEASE_MANIFEST.md)，条款见 `TRADEMARKS.md` 与 `ASSETS_LICENSE.md` |
-| 最终内容人工复核 | **APPROVED** | 已复核最终清单/哈希、图片、第三方通知与公开 Git 身份；不含私人材料或无权公开内容 |
-| 发布目标和操作 | **APPROVED** | 个人账号 `adlerliu27-ai`、仓库 `lextide`、`main`、Public、`v0.6.1` tag；先私有暂存再转 Public |
+## 2. 保护现有公开历史
 
-完整资产许可未确认时，不得仅删除资产声明而保留图形对外发布；必要运行资源的权利不清
-继续阻塞，非必要资源只有在明确决定排除并复核引用后才可移除。
+- 使用最新 Public main 的独立干净 clone 作为更新基础，只追加经过审查的源码差异。
+- **禁止**推送原始私人开发历史、force push、重写 main、删除或移动 `v0.6.1`。
+- 保留 README 64 px Logo、GitHub About 中性描述，以及 `LICENSE`、`TRADEMARKS.md`、`ASSETS_LICENSE.md`、`THIRD_PARTY_NOTICES.md`。
+- G7/G8 功能可在验收后的 0.9.0 中一起公开，不虚构未实际发布过的 `v0.7.0`、`v0.8.0` 标签。
+- Codex 只完成开发与交接；DeepSeek 在门槛满足后执行追加 commit、`v0.9.0` tag 与源码 Release。
 
-## 2. LICENSE 的准备与生效
+## 3. 许可和分发范围
 
-根目录 **`LICENSE` 已生效**：标准 MIT 正文，`Copyright (c) 2026 Mingjia Liu`，
-不含占位符或审查包装文字。此前用于评审的草稿文件已移除，避免与生效许可冲突。
+根目录 MIT 许可覆盖有权授权的原创 Python、测试、脚本、配置与文档文字。第三方代码、模型、声线和许可原文仍遵循各自条款，见 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES.md)。
 
-MIT 覆盖有权授权的原创代码、测试、脚本、配置和文档文字，要求保留版权与许可声明。
-第三方原文、模型、声线、字体、二进制、品牌和图形资源分别处理：
+- 品牌符号与 App icon 不采用 MIT，按品牌保留条款使用。
+- 功能图标与 design tokens 按既有资产许可使用。
+- README 截图仍是已审阅的自撰示例，标明历史界面版本；新截图须另审私人路径、正文和权利。
+- 本次没有新增翻译、OCR、模型或字体依赖。源码开源不等于模型和二进制可以一并分发。
+- FFmpeg、Kokoro runtime 和模型由用户明确安装/配置；开发版构建不代表干净 Mac 安装已通过。
 
-- 品牌资产（应用图标、品牌符号）：`TRADEMARKS.md` + `ASSETS_LICENSE.md`，**不适用 MIT**。
-- 功能图标与设计 tokens：与 MIT 兼容，以便界面可随代码复用。
-- 文档截图：允许 README 展示、个人学习与非商业教育引用，需注明来源。
-- 第三方依赖：保留原许可与声明，见 [THIRD_PARTY_NOTICES](../../THIRD_PARTY_NOTICES.md)。
+## 4. 最终源码候选检查
 
-逐文件分类与证据见 [ASSET_RELEASE_MANIFEST.md](ASSET_RELEASE_MANIFEST.md)。
-本清单不是法律意见或权属保证。
+`scripts/prepare_source_snapshot.py` 只导出 allowlist 内的已跟踪文件，生成无旧 `.git` 历史的源码目录、ZIP 和逐文件 manifest。输出必须是新的独立或忽略目录。工具默认将候选标记为待放行；它不代替本阶段验收结论。
 
-依据：[OSI MIT 标准文本](https://opensource.org/license/mit)、
-[GitHub 仓库许可指引](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository)，2026-10-24实时核对。
-这份检查清单不是法律意见或权属保证。
+- [ ] 软件版本为 0.9.0，来源 commit、修复 commit、依赖锁、Python 版本可追溯。
+- [ ] 全部必要源码、测试、GUI/翻译资源、README、学习指南和构建脚本齐全。
+- [ ] 无 `.git` 私人历史、`.venv`、`.artifacts`、用户任务、音频、模型、缓存、内部交接或研究资料。
+- [ ] 无 Token、Cookie、密码、签名材料、私人绝对路径和未经授权的第三方素材。
+- [ ] Gitleaks 与人工审查覆盖最终文件和准备追加到公开仓库的差异；扫描结果脱敏并留在候选之外。
+- [ ] ZIP 无路径穿越、重复/大小写冲突路径、逃逸链接或异常文件；CRC、SHA-256 与清单一致。
+- [ ] 所有公开文件在大小限制内；准备暂存的文件与批准的最终清单逐项一致。
+- [ ] 许可证及品牌文件与已批准的公开基线一致；README 功能与实际代码一致。
 
-## 3. 源码与二进制分发边界
+原开发历史继续保留在私人仓库。Gitleaks 零命中只表示规则范围内未发现秘密，不证明原历史可以公开。公开候选不携带原历史，后续更新必须保留已经公开的历史。
 
-- 源码候选保留 Python/配置/锁/测试/文档/必要资源、翻译 JSON、Clean English 和构建脚本。
-- 无 `.git` 旧历史、`.venv`、`.artifacts`、模型/voices、任务/音频、Token/Cookie、研究材料、App/ZIP/DMG。
-- 依赖与模型由用户按 README 单独安装；不提供来源不明的模型或第三方二进制。
-- 源码中选留的上游 LICENSE/COPYING/NOTICE 原文不重新许可；保留原作者和来源。
-- `packaging/macos/licenses/SOURCE_MANIFEST.json` 是历史构建审查资料，其 HTML 引用按
-  源码导出策略排除。它不是此次源码清单；当前文件以候选 manifest 为准。
-- PySide6/Qt、edge-tts、FFmpeg、Kokoro/phonemizer/eSpeak 等原许可与适用义务继续有效。
-  参阅 [第三方声明](../../THIRD_PARTY_NOTICES.md) 和 [G5二进制审查](G5_LICENSE_AUDIT.md)。
-- Apple Developer ID、公证和二进制 LGPL/GPL 分发审查仍 PENDING，**不是纯源码开源的
-  Apple 前置条件**。本次不发布已有未公证 App。
+## 5. 独立离线验证
 
-## 4. 身份、快照与审查
+[CI](../../.github/workflows/ci.yml) 使用 macos-latest、Python 3.13、uv 0.12.5；Actions 固定 commit，权限 `contents: read`，checkout 不持久化凭据。依赖安装可访问包仓库，测试阶段由 `tests/conftest.py` 阻断 DNS/socket；不安装 Qt、模型或证书，不上传文本。
 
-首版采用独立干净快照；不直接推送包含私人路径的原开发历史，不 reset/clean/rewrite。
-旧 G6.1 源码候选来自已验收 commit，已由双方验证；发布文档更新后的候选必须另存，
-不能将新文档套用旧 ZIP 哈希。
+- [ ] 从最终 ZIP 解压到新的独立目录，创建独立 Python 3.13 环境。
+- [ ] 按 [CONTRIBUTING](../../CONTRIBUTING.md) 和实际 CI 列表运行，不复用旧阶段通过数量。
+- [ ] Ruff、format、compileall、CLI/version 和离线测试全部通过。
+- [ ] 确认候选验证前后哈希一致；缓存、日志、venv 和测试临时文件存放在候选之外。
+- [ ] G9 GUI、真实 Edge/Kokoro、手动中文字幕、用户体验由独立验收报告分别记录。
 
-此次文档修改不由 Codex commit。候选需记录：已验收基线commit、精确文档/config overlay、
-每个文件SHA256、ZIP、未提交文档状态；**不要声称文档overlay已属于基线commit**。
-首次公开 commit 由 DeepSeek 在新的独立目录建立；不要把原目录或其 `.git` 复制过去。
+## 6. DeepSeek 发布及发布后验证
 
-逐项核对：
+门槛全部满足后，核对正确账号 `adlerliu27-ai` 与仓库 `lextide`，在最新 main 上应用经过审查的差异并创建新的公开提交。提交前检查 staged diff 和文件清单；不得用本机私人历史替换公开仓库。源码 Release 可只使用 GitHub 自动生成的 source archives，不上传未公证 App ZIP。
 
-- [ ] 来源、overlay、逐文件和ZIP哈希一致，解压无穿越/重复路径/符号链接；所有文件低于导出上限。
-- [ ] Gitleaks覆盖候选、原refs/reflogs和存储blobs；人工补查路径、fixture、图片和隐藏配置。
-- [ ] 候选不含私有材料；Gitleaks零命中只表示规则范围内未发现，不替代人工检查。
-- [ ] 新独立Python3.13环境能安装；CLI可用、翻译/图形资源完整。
-- [ ] 离线CI、Ruff、format、compile通过；业务文件与已验收基线逐字节一致。
-- [x] 有效 LICENSE、资产范围、文件清单与最终上传 SHA 已记录。
-- [x] 新仓库暂存文件与批准清单一致；公开作者姓名与邮箱已获准（不使用私人本地配置）。
+发布后必须记录并核对：
 
-本地结果由随候选交接的审计报告提供，不将私人证据或绝对本机路径放进公开仓库。
+- 仓库 URL、所有者、Public、main 的新 commit 与其父提交关系。
+- `v0.9.0` 指向正确公开 commit，`v0.6.1` 仍指向原 commit。
+- GitHub Actions 的真实状态和运行 URL；失败不能用本地测试结果替代。
+- 公开 clone 后再次运行离线安装/测试，核对版本、源码清单和 SHA-256。
+- README Logo、许可证、资产链接完整，没有私人文件或未经批准二进制附件。
 
-## 5. 最小CI与复现边界
-
-[CI配置](../../.github/workflows/ci.yml)：macos-latest、Python3.13、uv0.12.5；actions固定到commit，
-权限contents:read、checkout不持久化凭据。依赖安装可访问包仓库；之后离线测试使用
-conftest禁止DNS/socket，Edge及下载由fake覆盖。不安装Qt、模型、Apple证书或Kokoro runtime。
-
-命令见 [CONTRIBUTING](../../CONTRIBUTING.md)。13个文件涵盖CLI/授权、jobs、models、
-subtitles/G5markers/G6.1quotes、document/storage、packaging、两类Cleaner与源码导出。
-G6.1 已验收候选为 382 项通过；本次最终候选已在隔离 Python 3.13 环境中独立重新执行。
-远端 Actions 的真实结果以运行时日志为准，本项目不预先宣称通过。
-
-## 6. DeepSeek执行与发布后检查
-
-在所有必要授权到位后，用正确账号的私有仓库暂存可减少误公开风险。已有`lextide`需先
-检查，不覆盖。只推新的main初始历史；私有Actions日志也要在转Public前检查。
-确认有效LICENSE、内容清单、最终SHA、目标账号和Public授权后才更改可见性。
-
-发布后核对owner/URL/可见性/main/initial SHA、README和图形、许可证识别、文件完整性、
-Actions真实状态、另目录clone安装测试；tag仅在获准后添加。此次不上传macOS App或创建
-带二进制的Release。结果由DeepSeek返回，状态为PUBLISH_BLOCKED、PRIVATE_STAGING_READY、
-PUBLIC_PUBLISHED_VERIFICATION_PENDING或PUBLIC_RELEASE_PASS。
-
-G6_PASS 保持不变。本轮不开发 G7、自动翻译、OCR、Windows 或新音频功能。
+独立验收与实际发布结果分别留在开发侧交接报告中，不把私人机器路径、测试文章或完整诊断日志上传公开仓库。未经实际上传和复核，不使用 `PUBLIC_RELEASE_PASS`。

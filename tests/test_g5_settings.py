@@ -9,6 +9,7 @@ pytest.importorskip("PySide6.QtWidgets")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from lextide.desktop import controller, service  # noqa: E402
+from lextide.desktop.i18n import tr  # noqa: E402
 from lextide.desktop.preferences import load_preferences, save_preferences  # noqa: E402
 from lextide.desktop.window import MainWindow  # noqa: E402
 from lextide.engines.base import EngineCapabilities  # noqa: E402
@@ -24,6 +25,9 @@ def app():
 @pytest.fixture
 def desktop(app, monkeypatch, tmp_path):
     calls = []
+    # History workers are unrelated to dependency discovery and need a real
+    # WorkerClient.finished signal; this fixture captures payloads only.
+    monkeypatch.setattr(controller.Controller, "refresh_history", lambda *_: None)
     monkeypatch.setattr(
         controller.Controller,
         "_request",
@@ -90,27 +94,44 @@ def test_settings_save_and_reload_explicit_media_paths(desktop):
 
 
 @pytest.mark.parametrize("key", ["ffmpeg", "ffprobe"])
-def test_media_path_edit_invalidates_review_and_stale_capabilities(desktop, key):
-    w, c, _ = desktop
+def test_media_path_edit_invalidates_pending_click_and_stale_capabilities(
+    desktop, monkeypatch, key
+):
+    w, c, calls = desktop
     c.capabilities = {"edge-tts": {"available": True}, "kokoro": {"available": True}}
     approve(w, c)
     assert w.generate_button.isEnabled()
+    monkeypatch.setattr(c, "_start_synthesis", lambda *_: pytest.fail("stale runtime submitted"))
+    w.generate_button.click()
+    payload, callback = calls[-1]
+    assert payload["command"] == "preview" and c.pending_submission is not None
     getattr(w, f"{key}_edit").setText(f"/different/{key}")
     assert c.preview is None
     assert not w.approval_check.isChecked()
-    assert not w.generate_button.isEnabled()
     assert c.capabilities == {}
+    callback(service.preview(payload))
+    assert c.pending_submission is None
+    assert w.generate_button.isEnabled()  # Only a fresh click can approve the new runtime.
 
 
 def test_explicit_paths_propagate_to_synthesis_request(desktop, monkeypatch):
-    w, c, _ = desktop
+    w, c, calls = desktop
     for key in ("model_dir", "offline_python", "ffmpeg", "ffprobe"):
         getattr(w, f"{key}_edit").setText(f"/local/{key}")
     approve(w, c)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: True)
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
     requests = []
     monkeypatch.setattr(c, "_start_synthesis", requests.append)
-    c.generate()
+    w.generate_button.click()
+    assert not requests
+    payload, callback = calls[-1]
+    assert payload["command"] == "preview"
+    preview = service.preview(payload)
+    callback(preview)
+    assert len(requests) == 1
+    assert requests[0]["text"] == preview["text"]
+    assert requests[0]["approved_sha256"] == preview["sha256"]
+    assert service._authorize(requests[0], preview["text"], "edge-tts") is True
     assert requests[0]["runtime"] == {
         "model_dir": "/local/model_dir",
         "offline_python": "/local/offline_python",
@@ -234,7 +255,11 @@ def test_successful_recheck_clears_missing_media_guidance(desktop):
             },
         }
     )
-    assert "FFmpeg and ffprobe found" in w.status_label.text()
+    assert w.status_label.text() == tr("Ready")
+    for name in ("ffmpeg", "ffprobe"):
+        assert tr("{name} · Found: {path}", name=name, path=f"/local/{name}") in (
+            w.media_status_label.text()
+        )
     assert "Media tools unavailable" not in w.status_label.text()
     approve(w, c)
     assert w.generate_button.isEnabled()

@@ -33,6 +33,15 @@ def desktop(app, monkeypatch, tmp_path):
     monkeypatch.setattr(controller.Controller, "refresh_engines", lambda *_: None)
     w = MainWindow()
     c = controller.Controller(w, tmp_path)
+    c.test_requests = []
+    monkeypatch.setattr(
+        c,
+        "_request",
+        lambda payload, callback=None, **kw: c.test_requests.append((payload, callback)),
+    )
+    monkeypatch.setattr(
+        c, "_start_synthesis", lambda *_: pytest.fail("Unexpected synthesis in UI-only test")
+    )
     errors = []
     w.show_error = lambda title, message: errors.append((title, message))
     w.show()
@@ -54,11 +63,19 @@ def reviewed(w, c):
     return result
 
 
+def complete_preparation(c, index=-1):
+    payload, callback = c.test_requests[index]
+    assert payload["command"] == "preview"
+    callback(service.preview(payload))
+
+
 @pytest.mark.parametrize("field", ["text", "voice", "rate", "filter", "pause", "runtime", "output"])
-def test_review_invalidates_after_any_effective_edit(desktop, field):
+def test_pending_click_invalidates_after_any_effective_edit(desktop, field):
     w, c, _ = desktop
     reviewed(w, c)
     assert w.generate_button.isEnabled()
+    w.generate_button.click()
+    assert c.pending_submission is not None
     {
         "text": lambda: w.speech_edit.insertPlainText(" A new thought."),
         "voice": lambda: w.voice_combo.setCurrentText("en-US-JennyNeural"),
@@ -70,7 +87,9 @@ def test_review_invalidates_after_any_effective_edit(desktop, field):
     }[field]()
     assert c.preview is None
     assert not w.approval_check.isChecked()
-    assert not w.generate_button.isEnabled()
+    complete_preparation(c)
+    assert c.pending_submission is None
+    assert w.generate_button.isEnabled()  # A fresh click may approve the new snapshot.
 
 
 def test_stale_preview_never_overwrites_new_text(desktop):
@@ -83,25 +102,33 @@ def test_stale_preview_never_overwrites_new_text(desktop):
     assert c.preview is None
 
 
-def test_cancelled_online_permission_does_not_start(desktop, monkeypatch):
+def test_cancelled_local_preparation_does_not_start(desktop, monkeypatch):
     w, c, _ = desktop
     reviewed(w, c)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: False)
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
     monkeypatch.setattr(c, "_start_synthesis", lambda *_: pytest.fail("started without consent"))
-    c.generate()
+    w.generate_button.click()
+    c.cancel_preparation()
+    complete_preparation(c)
+    assert c.pending_submission is None
 
 
 def test_approved_snapshot_captured_not_later_editor(desktop, monkeypatch):
     w, c, _ = desktop
     preview = reviewed(w, c)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: True)
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    c.generate()
+    w.generate_button.click()
+    assert not calls
+    complete_preparation(c)
+    complete_preparation(c)  # A late duplicate cannot reuse the per-click snapshot.
     w.speech_edit.setPlainText("This is a later draft.")
     assert calls[0]["text"] == preview["text"]
     assert calls[0]["approved_sha256"] == preview["sha256"]
     assert calls[0]["allow_online"] is True
+    assert len(calls) == 1
+    assert service._authorize(calls[0], preview["text"], "edge-tts") is True
     assert "allow_online" not in load_preferences(c.root)
 
 
@@ -127,7 +154,9 @@ def test_offline_generation_uses_no_online_permission(desktop, monkeypatch):
     monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("online dialog"))
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    c.generate()
+    w.generate_button.click()
+    assert not calls
+    complete_preparation(c)
     assert calls[0]["allow_online"] is False
     assert calls[0]["audio_filter"] == "on"
 
@@ -269,17 +298,16 @@ def test_import_warnings_survive_review_and_cleanup_is_undoable(desktop):
     assert c.preview is None
 
 
-def test_online_dialog_nested_edit_rejects_stale_generation(desktop, monkeypatch):
+def test_edit_during_local_preparation_rejects_stale_generation(desktop, monkeypatch):
     w, c, _ = desktop
     reviewed(w, c)
 
-    def consent(*_):
-        w.speech_edit.setPlainText("A concurrent edit while the dialog is open.")
-        return True
-
-    monkeypatch.setattr(controller, "confirm_transmission", consent)
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
     monkeypatch.setattr(c, "_start_synthesis", lambda *_: pytest.fail("stale start"))
-    c.generate()
+    w.generate_button.click()
+    w.speech_edit.setPlainText("A concurrent edit while local preparation is pending.")
+    complete_preparation(c)
+    assert c.pending_submission is None
 
 
 def test_cancel_targets_selected_task_not_different_running_task(desktop, monkeypatch):

@@ -17,6 +17,7 @@ def default_data_dir() -> Path:
 def load_preferences(root: Path) -> dict:
     defaults = {
         "language": "en",
+        "subtitle_mode": "english",
         "transcript_font_size": 18,
         "theme": "system",
         "out_dir": str(root / "projects"),
@@ -48,6 +49,8 @@ def load_preferences(root: Path) -> dict:
         defaults["theme"] = "system"
     if defaults["language"] not in {"en", "zh_CN"}:
         defaults["language"] = "en"
+    if defaults["subtitle_mode"] not in {"english", "bilingual"}:
+        defaults["subtitle_mode"] = "english"
     return defaults
 
 

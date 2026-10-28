@@ -3,44 +3,47 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from math import ceil
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QFont, QIcon, QKeySequence, QTextLayout, QTextOption
+from PySide6.QtGui import QCloseEvent, QFont, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
-    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
+    QMessageBox,
+    QProgressBar,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from .bilingual_ui import CHINESE_ROLE, TranscriptDelegate
+from .i18n import current_language, tr
+from .localized import (
+    QAction,
+    QCheckBox,
+    QComboBox,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QMessageBox,
     QPlainTextEdit,
-    QProgressBar,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QSlider,
     QSpinBox,
-    QSplitter,
-    QStackedWidget,
-    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QVBoxLayout,
-    QWidget,
+    QToolButton,
 )
-
-from .i18n import current_language, tr
 from .theme import ASSETS, apply_theme, brand_symbol, icon
 
 
@@ -78,6 +81,24 @@ def row(*widgets: QWidget, stretch: int | None = None) -> QHBoxLayout:
     return layout
 
 
+def disclosure(text: str, content: QWidget) -> QToolButton:
+    """A keyboard-accessible heading that keeps secondary content out of the way."""
+    control = QToolButton()
+    control.setText(tr(text))
+    control.setObjectName("Disclosure")
+    control.setCheckable(True)
+    control.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+    control.setArrowType(Qt.ArrowType.RightArrow)
+    content.hide()
+
+    def toggle(expanded: bool) -> None:
+        content.setVisible(expanded)
+        control.setArrowType(Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow)
+
+    control.toggled.connect(toggle)
+    return control
+
+
 def table(headers: list[str]) -> QTableWidget:
     widget = QTableWidget(0, len(headers))
     widget.setHorizontalHeaderLabels([tr(header) for header in headers])
@@ -94,32 +115,6 @@ def table(headers: list[str]) -> QTableWidget:
         widget.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
     widget.setMinimumHeight(155)
     return widget
-
-
-class TranscriptDelegate(QStyledItemDelegate):
-    """Keep wrapped rows tall enough for the font and the existing item padding."""
-
-    def sizeHint(self, option, index):
-        self.initStyleOption(option, index)
-        widget = self.parent()
-        # Transcript QSS uses 12 px padding, 8 px margins and a 3 px left border.
-        # Reserve a little extra width so Qt's text rectangle never needs more lines.
-        width = max(1, widget.viewport().width() - 2 * widget.spacing() - 48)
-        text = QTextLayout(option.text, option.font)
-        text_option = QTextOption()
-        text_option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
-        text.setTextOption(text_option)
-        text.beginLayout()
-        height = 0.0
-        while True:
-            line = text.createLine()
-            if not line.isValid():
-                break
-            line.setLineWidth(width)
-            height += line.height()
-        text.endLayout()
-        # Include vertical padding (30 px), margins (6 px), and font rounding.
-        return QSize(width, ceil(height) + 40)
 
 
 class MainWindow(QMainWindow):
@@ -154,7 +149,8 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
         main.addWidget(content, 1)
-        content_layout.addWidget(self._toolbar())
+        self.toolbar = self._toolbar()
+        content_layout.addWidget(self.toolbar)
         self.page_stack = QStackedWidget()
         self.pages: dict[str, QWidget] = {}
         for name in self.PAGES:
@@ -222,18 +218,13 @@ class MainWindow(QMainWindow):
             if name == "Settings":
                 layout.addSpacing(21)
                 layout.addWidget(label("PREFERENCES", "micro"))
-            control = self._add_icon(button("  " + tr(name)), resource)
+            control = self._add_icon(button(name), resource)
             control.setObjectName("NavButton")
             control.setCheckable(True)
             control.clicked.connect(lambda checked=False, page=name: self.show_page(page))
             self.nav_buttons[name] = control
             layout.addWidget(control)
         layout.addStretch()
-        local = label("Local library", "heading")
-        layout.addWidget(local)
-        layout.addWidget(label("Saved on this device", "muted"))
-        layout.addSpacing(12)
-        layout.addWidget(label("Lextide · Desktop", "micro"))
         return sidebar
 
     def _toolbar(self) -> QFrame:
@@ -360,12 +351,6 @@ class MainWindow(QMainWindow):
         )
         layout.setSpacing(9)
         layout.setContentsMargins(26, 20, 26, 16)
-        steps = label(
-            "1  Add text     —     2  Review & prepare     —     3  Generate     —     4  Listen",
-            "muted",
-            wrap=True,
-        )
-        layout.addWidget(steps)
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText(tr("Session title (optional)"))
         self.title_edit.setAccessibleName(tr("Session title"))
@@ -404,29 +389,24 @@ class MainWindow(QMainWindow):
         self.source_path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.source_path_label)
         self.clean_mode_combo = QComboBox()
-        self.clean_mode_combo.addItem(tr("Original"), "original")
+        self.clean_mode_combo.addItem(tr("Keep Original"), "original")
         self.clean_mode_combo.addItem(tr("English Only"), "english")
         self.clean_mode_combo.setAccessibleName(tr("Text preparation mode"))
-        self.clean_button = button("Apply text preparation")
-        preparation_row = row(label("Text preparation"), self.clean_mode_combo, self.clean_button)
-        preparation_row.addStretch()
-        layout.addLayout(preparation_row)
-        self.cleaning_strength_combo = QComboBox()
-        self.cleaning_strength_combo.setAccessibleName(tr("Cleaning Mode"))
-        self.cleaning_strength_combo.addItem(tr("Conservative"), "conservative")
-        self.cleaning_strength_combo.addItem(
-            tr("Remove Chinese Translations"), "remove_chinese_translations"
-        )
-        self.cleaning_strength_combo.setEnabled(False)
-        self.cleaning_strength_combo.setToolTip(
+        self.clean_button = button("Apply")
+        self.clean_mode_combo.setToolTip(
             tr(
-                "Enhanced mode can remove translations containing names or numbers. "
-                "Review every result; uncertain text is kept."
+                "English Only prepares a local preview immediately. "
+                "Review retained uncertain passages before generating."
             )
         )
-        strength_row = row(label("Cleaning Mode"), self.cleaning_strength_combo)
-        strength_row.addStretch()
-        layout.addLayout(strength_row)
+        preparation = QGridLayout()
+        preparation.setHorizontalSpacing(10)
+        preparation.setVerticalSpacing(5)
+        preparation.addWidget(label("Text Processing", "muted"), 0, 0)
+        preparation.addWidget(self.clean_mode_combo, 1, 0)
+        preparation.addWidget(self.clean_button, 1, 1)
+        preparation.setColumnStretch(2, 1)
+        layout.addLayout(preparation)
         self.clean_summary_label = label(
             "Removes clear Chinese translations and formatting locally. "
             "Uncertain passages are kept for review.",
@@ -449,9 +429,9 @@ class MainWindow(QMainWindow):
         self.source_edit.setMinimumHeight(180)
         self.source_edit.setAccessibleName(tr("Original source text, read only"))
         original_layout.addWidget(self.source_edit)
-        original_layout.addWidget(label("Never overwritten · source preserved", "micro"))
         self.studio_splitter.addWidget(original)
         prepared, prepared_layout = box("TextPanel", 12)
+        prepared_layout.addWidget(label("Reading text", "heading"))
         self.text_tabs = QTabWidget()
         self.speech_edit = QPlainTextEdit()
         self.speech_edit.setPlaceholderText(
@@ -467,47 +447,38 @@ class MainWindow(QMainWindow):
         self.text_tabs.addTab(self.speech_edit, tr("Speech text"))
         self.text_tabs.addTab(self.subtitle_edit, tr("Subtitles"))
         prepared_layout.addWidget(self.text_tabs)
-        self.character_count_label = label(
-            "0 characters · preview to calculate chunks", "micro", wrap=True
-        )
+        self.character_count_label = label(tr("{count:,} characters", count=0), "micro", wrap=True)
         prepared_layout.addWidget(self.character_count_label)
         self.studio_splitter.addWidget(prepared)
+        self.studio_splitter.setStretchFactor(0, 2)
+        self.studio_splitter.setStretchFactor(1, 3)
+        self.studio_splitter.setSizes([300, 450])
+        self.studio_splitter.setMinimumHeight(300)
+        layout.addWidget(self.studio_splitter, 1)
         review, review_layout = box("Review", 12)
-        review_layout.addWidget(label("Text review", "heading"))
-        review_layout.addWidget(
-            label(
-                "Preview records the actual changes. Editing invalidates approval.",
-                "muted",
-                wrap=True,
-            )
-        )
+        self.review_content = QWidget()
+        review_body = QVBoxLayout(self.review_content)
+        review_body.setContentsMargins(0, 0, 0, 0)
         self.changes_edit = QPlainTextEdit()
         self.changes_edit.setObjectName("ChangesText")
         self.changes_edit.setReadOnly(True)
         self.changes_edit.setPlaceholderText(tr("No changes to review yet."))
         self.changes_edit.setAccessibleName(tr("Text change record"))
-        review_layout.addWidget(self.changes_edit)
+        self.changes_edit.setMinimumHeight(120)
+        self.changes_edit.setMaximumHeight(180)
+        review_body.addWidget(self.changes_edit)
         self.undo_button = button("Undo")
         self.undo_button.setToolTip(tr("Undo the last speech-text edit"))
         self.reset_button = button("Reset")
         self.reset_button.setToolTip(tr("Reset speech text to the original source"))
-        review_layout.addLayout(row(self.undo_button, self.reset_button))
-        review.setMinimumWidth(190)
-        self.studio_splitter.addWidget(review)
-        self.studio_splitter.setSizes([285, 310, 215])
-        self.studio_splitter.setMinimumHeight(250)
-        self.studio_splitter.setMaximumHeight(270)
-        for index in range(self.studio_splitter.count()):
-            self.studio_splitter.widget(index).setMaximumHeight(270)
-        layout.addWidget(self.studio_splitter)
-        layout.addWidget(
-            label(
-                "G4 subtitles use the reviewed speech text. "
-                "Independent subtitle wording is not available in this version.",
-                "micro",
-                wrap=True,
-            )
-        )
+        self.review_toggle = disclosure("Review changes", self.review_content)
+        review_header = row(self.review_toggle)
+        review_header.addStretch()
+        review_header.addWidget(self.undo_button)
+        review_header.addWidget(self.reset_button)
+        review_layout.addLayout(review_header)
+        review_layout.addWidget(self.review_content)
+        layout.addWidget(review)
         voice_card, voice_layout = box(margins=14)
         fields = QGridLayout()
         fields.setHorizontalSpacing(14)
@@ -515,6 +486,7 @@ class MainWindow(QMainWindow):
         self.engine_combo = QComboBox()
         self.engine_combo.addItem(tr("Online · Edge TTS"), "edge-tts")
         self.engine_combo.addItem(tr("Local / Offline · Kokoro"), "kokoro")
+        self.engine_combo.addItem(tr("Auto"), "auto")
         self.voice_combo = QComboBox()
         self.voice_combo.setEditable(True)
         self.voice_combo.setMinimumContentsLength(14)
@@ -549,6 +521,12 @@ class MainWindow(QMainWindow):
             wrap=True,
         )
         voice_layout.addWidget(self.engine_hint_label)
+        self.engine_decision_status = label("", "muted", wrap=True)
+        self.engine_settings_button = self._add_icon(button("Engine settings"), "settings")
+        self.engine_settings_button.clicked.connect(self._show_engine_settings)
+        voice_layout.addLayout(
+            row(self.engine_decision_status, self.engine_settings_button, stretch=0)
+        )
         self.filter_check = QCheckBox(tr("Kokoro v3 audio filter"))
         self.filter_check.setChecked(True)
         self.filter_check.setToolTip(
@@ -573,11 +551,22 @@ class MainWindow(QMainWindow):
         self.approval_check = QCheckBox(tr("I approve this reviewed text"))
         self.approval_check.setEnabled(False)
         self.preview_button = button("Preview && review")
+        # Compatibility controls remain available for older callers, while the
+        # controller owns the single Generate preparation/consent flow.
+        self.approval_check.setParent(footer)
+        self.preview_button.setParent(footer)
+        self.approval_check.hide()
+        self.preview_button.hide()
         self.generate_button = self._add_icon(button("Generate audio", primary=True), "plus")
         self.generate_button.setEnabled(False)
-        footer_layout.addLayout(
-            row(self.approval_check, self.preview_button, self.generate_button, stretch=0)
-        )
+        self.cancel_generation_button = button("Cancel Preparation")
+        self.cancel_generation_button.hide()
+        self.online_notice = label("", "micro", wrap=True)
+        generate_actions = row(self.online_notice)
+        generate_actions.addStretch()
+        generate_actions.addWidget(self.cancel_generation_button)
+        generate_actions.addWidget(self.generate_button)
+        footer_layout.addLayout(generate_actions)
         page.layout().addWidget(footer)
         return page
 
@@ -645,16 +634,47 @@ class MainWindow(QMainWindow):
         return page
 
     def _listen_page(self) -> QWidget:
-        page, layout = self._page(
-            "Listen", "One sentence at a time. A little more space to listen.", scroll=False
-        )
-        self.listen_title_label = label("No session loaded", "heading")
-        self.listen_title_label.setWordWrap(True)
+        page = QWidget()
+        page.setObjectName("Page")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(22, 10, 22, 10)
+        layout.setSpacing(8)
+        self.listen_header = QWidget()
+        header = QVBoxLayout(self.listen_header)
+        header.setContentsMargins(0, 0, 0, 0)
+        header.setSpacing(2)
+        title = label("Listen", "title")
+        title.setStyleSheet("font-size: 24px;")
         self.focus_check = QCheckBox(tr("Focus view"))
-        layout.addLayout(row(self.listen_title_label, self.focus_check, stretch=0))
-        body = QHBoxLayout()
-        body.setSpacing(16)
-        reader, reader_layout = box(margins=12)
+        header.addLayout(row(title, self.focus_check, stretch=0))
+        self.listen_subtitle = label(
+            "One sentence at a time. A little more space to listen.", "muted", wrap=True
+        )
+        header.addWidget(self.listen_subtitle)
+        layout.addWidget(self.listen_header)
+        self.listen_reader, reader_layout = box(margins=8)
+        reader_layout.setSpacing(4)
+        self.listen_reader.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.subtitle_mode_combo = QComboBox()
+        self.subtitle_mode_combo.addItem(tr("English Only"), "english")
+        self.subtitle_mode_combo.addItem(tr("English + Chinese"), "bilingual")
+        self.subtitle_mode_combo.setAccessibleName(tr("Subtitle display mode"))
+        self.subtitle_import_button = button("Import Chinese")
+        self.subtitle_edit_button = button("Edit selected Chinese")
+        self.subtitle_import_button.setEnabled(False)
+        self.subtitle_edit_button.setEnabled(False)
+        self.translation_tools = QWidget()
+        tools = QHBoxLayout(self.translation_tools)
+        tools.setContentsMargins(0, 0, 0, 0)
+        tools.addWidget(self.subtitle_import_button)
+        tools.addWidget(self.subtitle_edit_button)
+        tools.addStretch()
+        self.subtitle_status_label = label(
+            "Open a verified session to import or edit Chinese subtitles.", "micro", wrap=True
+        )
+        self.subtitle_status_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         self.font_combo = QComboBox()
         self.font_combo.setObjectName("TranscriptFontSize")
         self.font_combo.setEditable(False)
@@ -665,35 +685,58 @@ class MainWindow(QMainWindow):
         reader_layout.addLayout(
             row(
                 label("Transcript", "heading"),
+                self.subtitle_mode_combo,
                 label("Text size", "micro"),
                 self.font_combo,
                 stretch=0,
             )
         )
+        # Secondary actions stay compact; status remains visible even in Focus view
+        # so missing or unsafe translations never look like a successful import.
+        reader_layout.addLayout(row(self.translation_tools, self.subtitle_status_label, stretch=1))
         self.transcript_list = QListWidget()
         self.transcript_list.setItemDelegate(TranscriptDelegate(self.transcript_list))
         self.transcript_list.setObjectName("Transcript")
         self.transcript_list.setWordWrap(True)
         self.transcript_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.transcript_list.setUniformItemSizes(False)
-        self.transcript_list.setSpacing(3)
+        self.transcript_list.setLayoutMode(QListWidget.LayoutMode.Batched)
+        self.transcript_list.setBatchSize(100)
+        self.transcript_list.setProperty("subtitle_mode", "english")
+        self.transcript_list.setSpacing(2)
         self.transcript_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.transcript_list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.transcript_list.setAccessibleName(tr("Sentence transcript; choose a sentence to seek"))
-        reader_layout.addWidget(self.transcript_list, 1)
+        self.transcript_stack = QStackedWidget()
+        self.transcript_stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.transcript_stack.setMinimumHeight(120)
+        self.transcript_empty = QWidget()
+        empty = QVBoxLayout(self.transcript_empty)
+        empty.addStretch()
+        for text, role in (
+            ("No session loaded", "heading"),
+            ("Open a session from Library", "muted"),
+        ):
+            hint = label(text, role)
+            hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.addWidget(hint)
+        self.open_library_button = button("Open Library")
+        self.open_library_button.clicked.connect(lambda: self.show_page("Library"))
+        empty.addWidget(self.open_library_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        empty.addStretch()
+        self.transcript_stack.addWidget(self.transcript_empty)
+        self.transcript_stack.addWidget(self.transcript_list)
+        reader_layout.addWidget(self.transcript_stack, 1)
         self.follow_check = QCheckBox(tr("Follow current sentence"))
         self.follow_check.setChecked(True)
-        reader_layout.addLayout(
-            row(
-                label("Select a sentence to seek to its beginning.", "micro"),
-                self.follow_check,
-                stretch=0,
-            )
-        )
-        body.addWidget(reader, 1)
-        self.listen_aside, aside = box(margins=16)
-        self.listen_aside.setFixedWidth(220)
-        aside.addWidget(label("Session details", "heading"))
+        self.transcript_list.setToolTip(tr("Select a sentence to seek to its beginning."))
+        layout.addWidget(self.listen_reader, 1)
+        self.listen_aside, aside = box(margins=12)
+        self.listen_title_label = label("No session loaded", "heading")
+        self.listen_title_label.setWordWrap(True)
+        aside.addWidget(self.listen_title_label)
         self.listen_detail_label = label(
             "Open a verified session from Library.\n\n"
             "Audio and sentence subtitles stay linked to the same job.",
@@ -704,19 +747,17 @@ class MainWindow(QMainWindow):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         aside.addWidget(self.listen_detail_label)
-        aside.addStretch()
         self.listen_open_button = self._add_icon(button("Show files"), "folder")
         self.listen_open_button.setEnabled(False)
-        aside.addWidget(self.listen_open_button)
-        aside.addWidget(
-            label(
-                "Sentence-level subtitles\nPlayback speed is separate from synthesis rate.",
-                "micro",
-                wrap=True,
-            )
-        )
-        body.addWidget(self.listen_aside)
-        layout.addLayout(body, 1)
+        aside.addWidget(self.listen_open_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.session_details_toggle = disclosure("Session details", self.listen_aside)
+        self.session_details_toggle.setStyleSheet("padding: 4px 8px;")
+        footer = row(self.follow_check, self.session_details_toggle)
+        footer.insertStretch(1)
+        reader_layout.addLayout(footer)
+        layout.addWidget(self.listen_aside)
+        self.translation_tools.hide()
+        self.subtitle_status_label.hide()
         self._set_reader_font(18)
         return page
 
@@ -748,7 +789,7 @@ class MainWindow(QMainWindow):
             tr("Select a task to see its actual stage, completed chunks and recovery details.")
         )
         self.task_detail_edit.setMinimumHeight(100)
-        detail_layout.addWidget(self.task_detail_edit, 1)
+        self.task_diagnostics_toggle = disclosure("Task diagnostics", self.task_detail_edit)
         self.task_pause_button = self._add_icon(button("Pause"), "pause")
         self.task_resume_button = self._add_icon(button("Resume / retry", primary=True), "refresh")
         self.task_cancel_button = self._add_icon(button("Cancel task"), "x")
@@ -757,6 +798,8 @@ class MainWindow(QMainWindow):
         action_row = row(self.task_pause_button, self.task_resume_button, self.task_cancel_button)
         action_row.addStretch()
         detail_layout.addLayout(action_row)
+        detail_layout.addWidget(self.task_diagnostics_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
+        detail_layout.addWidget(self.task_detail_edit, 1)
         layout.addWidget(details, 1)
         layout.addWidget(
             label(
@@ -785,20 +828,17 @@ class MainWindow(QMainWindow):
         self.language_combo.setAccessibleName(tr("Interface language"))
         appearance_layout.addLayout(row(label("Language"), self.language_combo, stretch=0))
         self.language_hint = label(
-            "Save preferences, then restart Lextide to apply the language change.",
+            "Save to apply the language immediately.",
             "muted",
             wrap=True,
         )
         appearance_layout.addWidget(self.language_hint)
-        appearance_layout.addWidget(
-            label(
-                "Uses the system font and native controls. No decorative motion is used.",
-                "muted",
-                wrap=True,
-            )
-        )
         layout.addWidget(appearance)
-        layout.addWidget(label("Media tools · required", "heading"))
+        self.settings_advanced_content = QWidget()
+        advanced_layout = QVBoxLayout(self.settings_advanced_content)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        advanced_layout.setSpacing(12)
+        advanced_layout.addWidget(label("Media tools · required", "heading"))
         media, media_layout = box()
         media_layout.addWidget(
             label(
@@ -835,8 +875,8 @@ class MainWindow(QMainWindow):
             media_paths.addWidget(choose, index, 2)
         media_paths.setColumnStretch(1, 1)
         media_layout.addLayout(media_paths)
-        layout.addWidget(media)
-        layout.addWidget(label("Speech engines", "heading"))
+        advanced_layout.addWidget(media)
+        advanced_layout.addWidget(label("Speech engines", "heading"))
         engines, engines_layout = box()
         engines_layout.addWidget(label("Online · Edge TTS", "heading"))
         engines_layout.addWidget(
@@ -894,7 +934,7 @@ class MainWindow(QMainWindow):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         engines_layout.addWidget(self.model_install_label)
-        layout.addWidget(engines)
+        advanced_layout.addWidget(engines)
         layout.addWidget(label("Privacy & storage", "heading"))
         storage, storage_layout = box()
         storage_layout.addWidget(label("Online text transmission", "heading"))
@@ -921,9 +961,22 @@ class MainWindow(QMainWindow):
             )
         )
         layout.addWidget(storage)
-        self.settings_save_button = button("Save preferences", primary=True)
-        layout.addWidget(self.settings_save_button, alignment=Qt.AlignmentFlag.AlignRight)
+        self.settings_advanced_toggle = disclosure(
+            "Advanced diagnostics", self.settings_advanced_content
+        )
+        layout.addWidget(self.settings_advanced_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.settings_advanced_content)
         layout.addStretch()
+        self.settings_footer = QFrame()
+        self.settings_footer.setObjectName("SettingsFooter")
+        save_layout = QHBoxLayout(self.settings_footer)
+        save_layout.setContentsMargins(26, 12, 26, 12)
+        self.settings_save_status = label("", "muted", wrap=True)
+        self.settings_save_button = button("Save Settings", primary=True)
+        self.save_settings = self.settings_save_button
+        save_layout.addWidget(self.settings_save_status, 1)
+        save_layout.addWidget(self.settings_save_button)
+        page.layout().addWidget(self.settings_footer)
         return page
 
     def _player(self) -> QFrame:
@@ -1049,7 +1102,12 @@ class MainWindow(QMainWindow):
 
     def _set_focus_mode(self, enabled: bool) -> None:
         self.sidebar.setVisible(not enabled)
-        self.listen_aside.setVisible(not enabled)
+        self.toolbar.setVisible(not enabled)
+        self.listen_subtitle.setVisible(not enabled)
+        self.translation_tools.setVisible(not enabled and bool(self._cues))
+        self.focus_check.setText(tr("Exit focus view") if enabled else tr("Focus view"))
+        self.session_details_toggle.setVisible(not enabled)
+        self.listen_aside.setVisible(not enabled and self.session_details_toggle.isChecked())
 
     def _set_reader_font(self, pixels: int) -> None:
         font = QFont(self.font())
@@ -1062,16 +1120,25 @@ class MainWindow(QMainWindow):
     def _engine_ui(self) -> None:
         offline = self.engine_combo.currentData() == "kokoro"
         self.filter_check.setEnabled(offline)
+        self.engine_hint_label.hide()
         self.engine_hint_label.setText(
             tr("Local / Offline · uses installed Kokoro models; no automatic online fallback.")
             if offline
             else tr("Online service · your reviewed text is sent only after explicit permission.")
         )
 
+    def _show_engine_settings(self) -> None:
+        self.settings_advanced_toggle.setChecked(True)
+        self.show_page("Settings")
+        scroller = self.pages["Settings"].findChild(QScrollArea)
+        if scroller is not None:
+            scroller.widget().layout().activate()
+            scroller.verticalScrollBar().setValue(self.settings_advanced_toggle.geometry().top())
+
     def _update_character_count(self) -> None:
         self.character_count_label.setText(
             tr(
-                "{count:,} characters · preview to calculate chunks",
+                "{count:,} characters",
                 count=len(self.speech_edit.toPlainText()),
             )
         )
@@ -1108,7 +1175,7 @@ class MainWindow(QMainWindow):
                         )
                 else:
                     value = record.get(key, "—")
-                item = QTableWidgetItem(str(value))
+                item = QTableWidgetItem(value if isinstance(value, str) else str(value))
                 item.setData(Qt.ItemDataRole.UserRole, dict(record))
                 item.setToolTip(str(record.get("path") or record.get("export_path") or value))
                 widget.setItem(row_index, column, item)
@@ -1169,6 +1236,11 @@ class MainWindow(QMainWindow):
 
     def set_transcript(self, cues: Sequence[Any]) -> None:
         self._cues = list(cues)
+        self.transcript_stack.setCurrentWidget(
+            self.transcript_list if self._cues else self.transcript_empty
+        )
+        self.translation_tools.setVisible(bool(self._cues) and not self.focus_check.isChecked())
+        self.subtitle_status_label.setVisible(bool(self._cues))
         self.transcript_list.clear()
         for index, cue in enumerate(cues):
             if isinstance(cue, dict):
@@ -1189,6 +1261,34 @@ class MainWindow(QMainWindow):
         self.transcript_list.setCurrentItem(item)
         if self.follow_check.isChecked():
             self.transcript_list.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtCenter)
+
+    def set_subtitle_mode(self, mode: str) -> None:
+        self.transcript_list.setProperty("subtitle_mode", mode)
+        for index in range(self.transcript_list.count()):
+            self._update_accessible_transcript_item(self.transcript_list.item(index))
+        self.transcript_list.doItemsLayout()
+        self.transcript_list.viewport().update()
+
+    def _update_accessible_transcript_item(self, item: QListWidgetItem) -> None:
+        chinese = (
+            item.data(CHINESE_ROLE)
+            if self.transcript_list.property("subtitle_mode") == "bilingual"
+            else None
+        )
+        item.setData(
+            Qt.ItemDataRole.AccessibleTextRole,
+            item.text() + (f"\n{chinese}" if chinese else ""),
+        )
+
+    def set_chinese_translations(self, texts: Sequence[str | None]) -> None:
+        for index in range(self.transcript_list.count()):
+            item = self.transcript_list.item(index)
+            chinese = texts[index] if index < len(texts) else None
+            if item.data(CHINESE_ROLE) != chinese:
+                item.setData(CHINESE_ROLE, chinese)
+            self._update_accessible_transcript_item(item)
+        self.transcript_list.doItemsLayout()
+        self.transcript_list.viewport().update()
 
     def set_busy(self, busy: bool) -> None:
         self.preview_button.setEnabled(not busy)
