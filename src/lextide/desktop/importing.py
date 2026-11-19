@@ -60,7 +60,7 @@ SUPPORTED_ENCODINGS = (
     "cp1252",
     "iso8859-1",
 )
-PDF_NO_TEXT_MESSAGE = "该 PDF 没有可提取的文本层，当前版本暂不支持 OCR。"
+PDF_NO_TEXT_MESSAGE = "该 PDF 没有可提取的文本层。可将页面另存为 PNG 或 JPEG 后导入。"
 _WORD_NAMESPACES = (
     "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
     "http://purl.oclc.org/ooxml/wordprocessingml/main",

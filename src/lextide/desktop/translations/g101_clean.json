@@ -1,0 +1,13 @@
+{
+  "Apply to reading text": "应用到朗读稿",
+  "Discard preview": "放弃预览",
+  "English preview": "英文预览",
+  "Preview English": "预览英文",
+  "Re-apply English Only": "重新应用仅英文",
+  "Restore original": "恢复原文",
+  "{summary} · Generate Audio also uses this preview.": "{summary} · 生成音频也会采用此预览。",
+  "Preview from the original text?": "根据原文生成预览？",
+  "Your edits will be kept. Discard the preview to return to this draft.": "将保留你的编辑。放弃预览即可返回当前朗读稿。",
+  "Chinese passages removed: {removed}": "已移除 {removed} 段中文",
+  "This replaces the edits in the reading pane. You can use Undo.": "将替换朗读区中的编辑内容，可通过“撤销”恢复。"
+}

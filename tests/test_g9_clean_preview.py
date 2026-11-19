@@ -51,9 +51,9 @@ def test_selection_prepares_enhanced_preview_without_extra_button(desktop):
     assert w.source_edit.toPlainText() == SOURCE
     assert w.speech_edit.toPlainText() == ENGLISH
     assert data["removed_chinese_segments"] == 2
-    assert c.cleaning["version"] == "english-translations-v1"
+    assert c.cleaning["version"] == "english-translations-v2"
     assert c.pending_clean is None and w.generate_button.isEnabled()
-    assert w.clean_button.text() == tr("Apply")
+    assert w.clean_button.text() == tr("Apply to reading text")
     assert not starts and not errors
 
 
@@ -96,6 +96,7 @@ def test_edited_draft_can_decline_replacement_before_automatic_clean(desktop, mo
     monkeypatch.setattr(QMessageBox, "question", decline)
     w.clean_mode_combo.setCurrentIndex(w.clean_mode_combo.findData("english"))
     assert len(questions) == 1
+    assert w.clean_mode_combo.currentData() == "original"
     assert w.speech_edit.toPlainText() == final
     assert w.source_edit.toPlainText() == SOURCE
     assert c.pending_clean is None

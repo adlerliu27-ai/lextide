@@ -1,0 +1,10 @@
+{
+  "Choose a readable, single PNG or JPEG image (up to 32 MiB and 24 megapixels).": "请选择可读取的单张 PNG 或 JPEG 图片（最大 32 MiB、2400 万像素）。",
+  "The local OCR tool is unavailable. Check the installation or choose another provider.": "未找到本地 OCR 工具，请检查安装或选择另一种引擎。",
+  "This OCR installation lacks a required language. Check local language data.": "本地 OCR 缺少所需语言，请检查语言数据。",
+  "Local recognition timed out. Try Tesseract or a smaller image.": "本地识别超时，请试用 Tesseract 或较小的图片。",
+  "No text was recognized. Try a clearer image.": "未识别出文字，请选择更清晰的图片。",
+  "The expected language was missing from the result. Check the language and image.": "结果缺少预期语言，请检查语言选择和图片。",
+  "The recognition result exceeds the text limit. Try a smaller section.": "识别结果超过文字上限，请缩小图片范围。",
+  "Local recognition failed. Check the image and the selected provider.": "本地识别失败，请检查图片和识别引擎。"
+}

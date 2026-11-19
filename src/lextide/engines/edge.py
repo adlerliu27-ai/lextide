@@ -11,6 +11,7 @@ import edge_tts
 
 from ..config import MAX_AUDIO_BYTES, Settings
 from ..errors import InputError, StudioError, ValidationError
+from ..voices import AMERICAN_VOICES
 from .base import EngineCapabilities, EngineResult, SentenceBoundary
 
 
@@ -26,7 +27,7 @@ class EdgeEngine:
             True,
             True,
             True,
-            ("en-US-GuyNeural",),
+            tuple(v.voice_id for v in AMERICAN_VOICES if v.online),
             notes=("声线列表与服务可用性仅在授权后的合成阶段联网确认。",),
         )
 

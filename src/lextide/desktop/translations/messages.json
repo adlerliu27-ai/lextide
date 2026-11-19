@@ -13,7 +13,7 @@
   "Ignored DOCX external/embedded references (altChunk); no external resources were read.": "DOCX 含外部/嵌入内容引用（altChunk），已忽略且未读取外部资源。",
   "Extracted PDF text in page order with blank lines between pages.": "PDF 按页序提取文本层，页间以空行分隔。",
   "PDF columns, reading order, ligatures and headers/footers may differ from the page layout; check and edit the preview.": "PDF 的多栏、阅读顺序、连字和页眉页脚可能与视觉布局不同，请核对并编辑预览。",
-  "This PDF has no extractable text layer. OCR is not supported in this version.": "该 PDF 没有可提取的文本层，当前版本暂不支持 OCR。",
+  "This PDF has no text layer. Import a PNG or JPEG of the page to recognize its text.": "该 PDF 没有可提取的文本层。可将页面另存为 PNG 或 JPEG 后导入。",
   "No body text could be imported. Check the source content and extraction rules.": "文件没有可导入的正文文本；请检查内容及提取规则。",
   "Cannot read the file. Check that it exists and is readable.": "无法读取文件；请检查文件是否存在以及读取权限。",
   "Supported formats are TXT, Markdown (.md), DOCX and text-layer PDF.": "仅支持 TXT、Markdown (.md)、DOCX 和文本层 PDF。",

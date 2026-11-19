@@ -1,0 +1,20 @@
+{
+  "Recognize image text": "识别图片文字",
+  "Recognition runs on this Mac. The image and its text stay on this device.": "在本机识别文字，图片与识别内容仅在此设备上处理。",
+  "A successful import will replace your current Studio draft.": "识别成功后，结果将替换制作页中的当前草稿。",
+  "English and Simplified Chinese": "英文和简体中文",
+  "Simplified Chinese": "简体中文",
+  "Text in the image": "图片文字语言",
+  "Recognition engine": "识别引擎",
+  "Starting recognition again will discard your edits to this result.": "重新识别将丢弃你对本次结果的修订。",
+  "Discard edits and recognize again": "舍弃修订并重新识别",
+  "Recognize locally": "开始本地识别",
+  "Recognizing image text locally…": "正在本机识别图片文字…",
+  "Image recognition in progress": "正在识别图片",
+  "Cancel recognition": "取消识别",
+  "Image recognition cancelled.": "已取消图片识别。",
+  "Import a local document or image": "导入本地文档或图片",
+  "Documents and images (*.txt *.md *.docx *.pdf *.png *.jpg *.jpeg)": "文档和图片 (*.txt *.md *.docx *.pdf *.png *.jpg *.jpeg)",
+  "Last image recognition · {provider} · {languages} · {ms} ms": "最近一次图片识别 · {provider} · {languages} · {ms} 毫秒",
+  "TXT, Markdown, DOCX, text-based PDF or a PNG/JPEG image.\nText is extracted locally for your review.": "支持 TXT、Markdown、DOCX、文本层 PDF 和 PNG/JPEG 图片。\n在本机提取文字，供你检查和编辑。"
+}

@@ -26,7 +26,7 @@ for source in sorted((root / 'src/lextide').rglob('*.py')):
 a = Analysis(
     [str(root / 'packaging/macos/launcher.py')],
     pathex=[str(root / 'src')],
-    binaries=[], datas=datas,
+    binaries=[(str(staging / 'lextide-vision-ocr'), 'ocr')], datas=datas,
     hiddenimports=['lextide.desktop.worker', 'lextide.desktop.app', 'lextide.cli',
                    'lextide.longform.process'],
     hookspath=[], hooksconfig={}, runtime_hooks=[],

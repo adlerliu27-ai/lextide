@@ -63,7 +63,7 @@ def test_explicit_translation_mode_preserves_complete_english_in_order(source, e
     assert result.original_text == source
     assert result.cleaned_text == expected
     assert result.mode == MODE
-    assert result.version == "english-translations-v1"
+    assert result.version == "english-translations-v2"
     assert result.removed_chinese_segments > 0
     assert asdict(result) == asdict(clean_english(source, mode=MODE))
 
@@ -108,7 +108,7 @@ def test_default_and_explicit_conservative_retain_historical_behavior():
     default = clean_english(source)
     explicit = clean_english(source, mode="conservative")
     assert default.cleaned_text == source
-    assert default.version == "english-rules-v1"
+    assert default.version == "english-rules-v2"
     assert default.mode == "conservative"
     assert asdict(default) == asdict(explicit)
 

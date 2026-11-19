@@ -56,6 +56,17 @@ def label(text: str, role: str = "", *, wrap: bool = False) -> QLabel:
     return widget
 
 
+class OptionalStatusLabel(QLabel):
+    """Actionable status occupies space only while there is something to show."""
+
+    def setText(self, text):
+        super().setText(text)
+        self.setVisible(bool(text))
+
+    def clear(self):
+        self.setText("")
+
+
 def button(text: str, *, primary: bool = False, quiet: bool = False) -> QPushButton:
     widget = QPushButton(tr(text))
     widget.setProperty("primary", primary)
@@ -159,7 +170,10 @@ class MainWindow(QMainWindow):
             self.page_stack.addWidget(page)
         content_layout.addWidget(self.page_stack, 1)
         content_layout.addWidget(self._player())
-        self.status_label = label("Ready · Your source files stay on this device.", "micro")
+        self.status_label = OptionalStatusLabel()
+        self.status_label.setProperty("role", "micro")
+        self.status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.status_label.setText("")
         self.status_label.setContentsMargins(16, 3, 16, 3)
         content_layout.addWidget(self.status_label)
         self._shortcuts()
@@ -306,7 +320,7 @@ class MainWindow(QMainWindow):
         start_layout.addWidget(label("Import a document", "heading"))
         start_layout.addWidget(
             label(
-                "TXT, Markdown, DOCX or text-based PDF.\n"
+                "TXT, Markdown, DOCX, text-based PDF or a PNG/JPEG image.\n"
                 "Text is extracted locally for your review.",
                 "muted",
                 wrap=True,
@@ -355,7 +369,8 @@ class MainWindow(QMainWindow):
         self.title_edit.setPlaceholderText(tr("Session title (optional)"))
         self.title_edit.setAccessibleName(tr("Session title"))
         self.import_studio_button = self._add_icon(button("Import file"), "upload")
-        self.paste_source_button = button("Paste text")
+        self.paste_source_button = button("Paste")
+        self.paste_source_button.setToolTip(tr("Paste a clipboard image or text (⌘V)."))
         self.encoding_combo = QComboBox()
         self.encoding_combo.addItem(tr("Auto encoding"), None)
         for encoding in (
@@ -383,6 +398,18 @@ class MainWindow(QMainWindow):
                 stretch=0,
             )
         )
+        self.ocr_progress = QWidget()
+        progress_layout = QHBoxLayout(self.ocr_progress)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.addWidget(label("Recognizing image text locally…", "muted"))
+        busy = QProgressBar()
+        busy.setRange(0, 0)
+        busy.setAccessibleName(tr("Image recognition in progress"))
+        progress_layout.addWidget(busy, 1)
+        self.cancel_ocr_button = button("Cancel recognition")
+        progress_layout.addWidget(self.cancel_ocr_button)
+        self.ocr_progress.hide()
+        layout.addWidget(self.ocr_progress)
         self.source_path_label = label(
             "No source yet · Import a file or paste your original text.", "muted", wrap=True
         )
@@ -392,7 +419,9 @@ class MainWindow(QMainWindow):
         self.clean_mode_combo.addItem(tr("Keep Original"), "original")
         self.clean_mode_combo.addItem(tr("English Only"), "english")
         self.clean_mode_combo.setAccessibleName(tr("Text preparation mode"))
-        self.clean_button = button("Apply")
+        self.clean_button = button("Apply to reading text")
+        self.discard_preview_button = button("Discard preview", quiet=True)
+        self.discard_preview_button.hide()
         self.clean_mode_combo.setToolTip(
             tr(
                 "English Only prepares a local preview immediately. "
@@ -405,7 +434,8 @@ class MainWindow(QMainWindow):
         preparation.addWidget(label("Text Processing", "muted"), 0, 0)
         preparation.addWidget(self.clean_mode_combo, 1, 0)
         preparation.addWidget(self.clean_button, 1, 1)
-        preparation.setColumnStretch(2, 1)
+        preparation.addWidget(self.discard_preview_button, 1, 2)
+        preparation.setColumnStretch(3, 1)
         layout.addLayout(preparation)
         self.clean_summary_label = label(
             "Removes clear Chinese translations and formatting locally. "
@@ -431,7 +461,8 @@ class MainWindow(QMainWindow):
         original_layout.addWidget(self.source_edit)
         self.studio_splitter.addWidget(original)
         prepared, prepared_layout = box("TextPanel", 12)
-        prepared_layout.addWidget(label("Reading text", "heading"))
+        self.reading_heading = label("Reading text", "heading")
+        prepared_layout.addWidget(self.reading_heading)
         self.text_tabs = QTabWidget()
         self.speech_edit = QPlainTextEdit()
         self.speech_edit.setPlaceholderText(
@@ -487,10 +518,11 @@ class MainWindow(QMainWindow):
         self.engine_combo.addItem(tr("Online · Edge TTS"), "edge-tts")
         self.engine_combo.addItem(tr("Local / Offline · Kokoro"), "kokoro")
         self.engine_combo.addItem(tr("Auto"), "auto")
+        self.gender_combo = QComboBox()
+        self.gender_combo.addItem(tr("American male"), "male")
+        self.gender_combo.addItem(tr("American female"), "female")
         self.voice_combo = QComboBox()
-        self.voice_combo.setEditable(True)
-        self.voice_combo.setMinimumContentsLength(14)
-        self.voice_combo.addItem("en-US-GuyNeural")
+        self.voice_combo.setMinimumContentsLength(12)
         self.rate_spin = QSpinBox()
         self.rate_spin.setRange(-50, 100)
         self.rate_spin.setValue(-4)
@@ -502,18 +534,19 @@ class MainWindow(QMainWindow):
         for column, (caption, field) in enumerate(
             (
                 ("Speech engine", self.engine_combo),
+                ("American voice", self.gender_combo),
                 ("Voice", self.voice_combo),
                 ("Speaking rate", self.rate_spin),
                 ("Sentence pause", self.pause_spin),
             )
         ):
-            fields.addWidget(label(caption, "muted"), 0, column)
+            field_row, field_column = divmod(column, 3)
+            fields.addWidget(label(caption, "muted"), 2 * field_row, field_column)
             field.setAccessibleName(tr(caption))
-            fields.addWidget(field, 1, column)
+            fields.addWidget(field, 2 * field_row + 1, field_column)
         fields.setColumnStretch(0, 3)
-        fields.setColumnStretch(1, 3)
-        fields.setColumnStretch(2, 1)
-        fields.setColumnStretch(3, 1)
+        fields.setColumnStretch(1, 2)
+        fields.setColumnStretch(2, 3)
         voice_layout.addLayout(fields)
         self.engine_hint_label = label(
             "Online service · your reviewed text is sent only after explicit permission.",
@@ -536,9 +569,8 @@ class MainWindow(QMainWindow):
         self.output_dir_edit.setPlaceholderText(tr("Output folder"))
         self.output_dir_edit.setAccessibleName(tr("Session output directory"))
         self.output_dir_button = self._add_icon(button("Choose…"), "folder")
-        voice_layout.addLayout(
-            row(self.filter_check, self.output_dir_edit, self.output_dir_button, stretch=1)
-        )
+        voice_layout.addWidget(self.filter_check)
+        voice_layout.addLayout(row(self.output_dir_edit, self.output_dir_button, stretch=0))
         layout.addWidget(voice_card)
         layout.addStretch()
         footer = QFrame()
@@ -547,7 +579,13 @@ class MainWindow(QMainWindow):
         footer_layout.setContentsMargins(26, 11, 26, 11)
         footer_layout.setSpacing(6)
         self.studio_status_label = label("Review your text before generation.", "muted", wrap=True)
-        footer_layout.addWidget(self.studio_status_label)
+        self.generation_summary = label("", "muted", wrap=True)
+        self.generation_summary.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        status_row = row(self.studio_status_label, self.generation_summary, stretch=0)
+        status_row.setStretch(1, 1)
+        footer_layout.addLayout(status_row)
         self.approval_check = QCheckBox(tr("I approve this reviewed text"))
         self.approval_check.setEnabled(False)
         self.preview_button = button("Preview && review")
@@ -557,7 +595,7 @@ class MainWindow(QMainWindow):
         self.preview_button.setParent(footer)
         self.approval_check.hide()
         self.preview_button.hide()
-        self.generate_button = self._add_icon(button("Generate audio", primary=True), "plus")
+        self.generate_button = button("Generate Audio", primary=True)
         self.generate_button.setEnabled(False)
         self.cancel_generation_button = button("Cancel Preparation")
         self.cancel_generation_button.hide()
@@ -935,6 +973,9 @@ class MainWindow(QMainWindow):
         )
         engines_layout.addWidget(self.model_install_label)
         advanced_layout.addWidget(engines)
+        self.ocr_diagnostic = label("", "muted", wrap=True)
+        self.ocr_diagnostic.hide()
+        advanced_layout.addWidget(self.ocr_diagnostic)
         layout.addWidget(label("Privacy & storage", "heading"))
         storage, storage_layout = box()
         storage_layout.addWidget(label("Online text transmission", "heading"))

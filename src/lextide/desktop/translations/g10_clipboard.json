@@ -1,0 +1,9 @@
+{
+  "Paste": "粘贴",
+  "Paste a clipboard image or text (⌘V).": "粘贴剪贴板中的图片或文本（⌘V）。",
+  "Clipboard image": "剪贴板图片",
+  "Choose a valid clipboard image within 32 MiB and 24 megapixels.": "请复制有效图片，大小不超过 32 MiB、2400 万像素。",
+  "To open a copied file, use Import file.": "剪贴板中是文件路径，请使用“导入文件”。",
+  "Copy an image or plain text first.": "请先复制一张图片或一段纯文本。",
+  "Clipboard text contains invalid Unicode. Nothing was pasted.": "剪贴板文本包含无效 Unicode 字符，本次未粘贴。"
+}

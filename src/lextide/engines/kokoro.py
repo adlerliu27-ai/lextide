@@ -18,6 +18,7 @@ from ..config import MAX_AUDIO_BYTES, Settings
 from ..errors import InputError, StudioError, ValidationError
 from ..models import default_model_dir, model_lease, model_status
 from ..runtime import bundled_source_root, external_runtime_environment, is_frozen
+from ..voices import kokoro_voice_ids
 from .base import EngineCapabilities, EngineResult, SentenceBoundary
 from .sentence_split import split_sentences
 
@@ -189,12 +190,17 @@ class KokoroEngine:
         runtime_ready = self._runtime_status().get("ready") is True
         installed = False
         identity = None
+        voices = ()
         try:
             status = model_status(self.model_dir or default_model_dir())
             installed = status["installed"] and all(
                 asset["present"] and asset["actual_size"] == asset["expected_size"]
                 for asset in status["assets"]
             )
+            if installed:
+                for asset in status["assets"]:
+                    if asset["filename"] == _VOICES_FILE:
+                        voices = kokoro_voice_ids(Path(asset["path"]))
             identity = {"id": status["model_id"], "version": status["version"]}
         except StudioError:
             pass
@@ -204,7 +210,7 @@ class KokoroEngine:
             False,
             installed,
             runtime_ready and installed,
-            ("af_heart",),
+            voices,
             timing_source=_TIMING,
             model=identity,
             notes=(

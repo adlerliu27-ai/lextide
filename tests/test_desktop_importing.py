@@ -306,7 +306,7 @@ def test_pdf_without_text_layer_has_exact_required_message(tmp_path):
     path = write_pdf(tmp_path / "scan.pdf", [""])
     with pytest.raises(DocumentImportError) as caught:
         import_document(path)
-    assert str(caught.value) == "该 PDF 没有可提取的文本层，当前版本暂不支持 OCR。"
+    assert str(caught.value) == "该 PDF 没有可提取的文本层。可将页面另存为 PNG 或 JPEG 后导入。"
 
 
 def test_pdf_encrypted_and_corrupt_have_distinct_messages(tmp_path):

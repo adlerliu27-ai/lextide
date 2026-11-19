@@ -24,6 +24,7 @@ def desktop(tmp_path, monkeypatch, request):
     preferences = load_preferences(tmp_path)
     preferences["language"] = request.param
     save_preferences(tmp_path, preferences)
+    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: True)
     w = MainWindow()
     c = controller.Controller(w, tmp_path)
     errors, requests, starts = [], [], []
@@ -33,8 +34,16 @@ def desktop(tmp_path, monkeypatch, request):
     )
     monkeypatch.setattr(c, "_start_synthesis", starts.append)
     c.capabilities = {
-        "edge-tts": {"available": True, "voices": ["en-US-GuyNeural"], "rate_range": [-50, 100]},
-        "kokoro": {"available": True, "voices": ["af_heart"], "rate_range": [-50, 100]},
+        "edge-tts": {
+            "available": True,
+            "voices": ["en-US-GuyNeural", "en-US-AriaNeural"],
+            "rate_range": [-50, 100],
+        },
+        "kokoro": {
+            "available": True,
+            "voices": ["am_michael", "af_heart"],
+            "rate_range": [-50, 100],
+        },
     }
     w.speech_edit.setPlainText('The teacher said, "Practice every day."')
     yield w, c, requests, starts, errors
@@ -60,17 +69,17 @@ def test_one_explicit_click_captures_current_text(desktop, engine, monkeypatch):
     text = w.speech_edit.toPlainText()
     assert not requests and not starts
     assert w.generate_button.isEnabled()
-    assert w.generate_button.text() == tr(
-        "Send to Edge && Generate" if engine == "edge-tts" else "Generate Audio"
-    )
+    assert w.generate_button.text() == tr("Generate Audio")
+    confirmations = []
     monkeypatch.setattr(
-        controller, "confirm_transmission", lambda *_: pytest.fail("duplicate dialog")
+        controller, "confirm_transmission", lambda *args: confirmations.append(args) or True
     )
     w.generate_button.click()
     assert not starts  # Local preview is not a TTS request.
     assert len(requests) == 1 and requests[0][0]["command"] == "preview"
     complete(requests[0])
     assert len(starts) == 1
+    assert len(confirmations) == (1 if engine == "edge-tts" else 0)
     payload = starts[0]
     assert payload["text"] == text
     assert payload["approved_sha256"] == hashlib.sha256(text.encode()).hexdigest()
@@ -86,7 +95,7 @@ def test_late_preview_cannot_reuse_old_click(desktop, mutation):
     {
         "text": lambda: w.speech_edit.insertPlainText("Changed."),
         "rate": lambda: w.rate_spin.setValue(3),
-        "voice": lambda: w.voice_combo.setCurrentText("en-US-JennyNeural"),
+        "voice": lambda: w.gender_combo.setCurrentIndex(w.gender_combo.findData("female")),
         "output": lambda: w.output_dir_edit.setText("/another/destination"),
         "cancel": c.cancel_preparation,
         "close": lambda: setattr(c, "closing", True),
@@ -150,16 +159,20 @@ def test_auto_late_probe_ignored_and_no_text_in_probe(desktop):
 
 def test_auto_requires_explicit_compatible_voice_selection(desktop):
     w, c, requests, starts, _ = desktop
+    w.voice_combo.setCurrentIndex(1)  # Pin Guy instead of accepting a recommendation.
     w.engine_combo.setCurrentIndex(w.engine_combo.findData("auto"))
     requests[-1][1](
         {
-            "decision": {"engine": "kokoro", "ready": True, "reason": "Will use Kokoro offline"},
+            "edge_probe": {"reachable": False},
+            "offline_runtime": {"ready": True},
+            "model": {"ready": True},
             "engines": [{"engine_id": "kokoro", **c.capabilities["kokoro"]}],
         }
     )
-    assert w.voice_combo.currentText() == "en-US-GuyNeural"
+    assert c.pinned_voice == "en-US-GuyNeural" and w.voice_combo.currentIndex() < 0
     assert not w.generate_button.isEnabled()
-    w.voice_combo.setCurrentText("af_heart")
+    w.voice_combo.setCurrentIndex(1)
+    assert c._settings()["voice"] == "am_michael"
     assert w.generate_button.isEnabled()
     assert not starts
 

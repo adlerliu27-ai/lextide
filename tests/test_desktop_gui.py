@@ -78,7 +78,7 @@ def test_pending_click_invalidates_after_any_effective_edit(desktop, field):
     assert c.pending_submission is not None
     {
         "text": lambda: w.speech_edit.insertPlainText(" A new thought."),
-        "voice": lambda: w.voice_combo.setCurrentText("en-US-JennyNeural"),
+        "voice": lambda: w.gender_combo.setCurrentIndex(w.gender_combo.findData("female")),
         "rate": lambda: w.rate_spin.setValue(5),
         "filter": lambda: w.filter_check.setChecked(False),
         "pause": lambda: w.pause_spin.setValue(120),
@@ -116,7 +116,10 @@ def test_cancelled_local_preparation_does_not_start(desktop, monkeypatch):
 def test_approved_snapshot_captured_not_later_editor(desktop, monkeypatch):
     w, c, _ = desktop
     preview = reviewed(w, c)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    confirmations = []
+    monkeypatch.setattr(
+        controller, "confirm_transmission", lambda *args: confirmations.append(args) or True
+    )
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
     w.generate_button.click()
@@ -128,8 +131,100 @@ def test_approved_snapshot_captured_not_later_editor(desktop, monkeypatch):
     assert calls[0]["approved_sha256"] == preview["sha256"]
     assert calls[0]["allow_online"] is True
     assert len(calls) == 1
+    assert confirmations == [(w, preview["text"], calls[0]["settings"], preview["sha256"])]
     assert service._authorize(calls[0], preview["text"], "edge-tts") is True
     assert "allow_online" not in load_preferences(c.root)
+
+
+@pytest.mark.parametrize("regenerate", [False, True])
+def test_declined_generation_requires_new_click_and_new_consent(desktop, monkeypatch, regenerate):
+    w, c, _ = desktop
+    preview = reviewed(w, c)
+    if regenerate:
+        audio = c.root / "verified-audio.mp3"
+        audio.write_bytes(b"local verified-output fixture")
+        monkeypatch.setattr(c.player, "load", lambda *_: None)
+        monkeypatch.setattr(c.bilingual, "load", lambda *_: None)
+        c._verified({"audio_path": str(audio)}, "Local fixture", c._signature())
+        w.show_page("Studio")
+        assert w.generate_button.text() == controller.tr("Regenerate Audio")
+    confirmations, calls = [], []
+    answers = iter((False, True))
+
+    def confirm(*args):
+        confirmations.append(args)
+        return next(answers)
+
+    monkeypatch.setattr(controller, "confirm_transmission", confirm)
+    monkeypatch.setattr(c, "_start_synthesis", calls.append)
+    w.generate_button.click()
+    complete_preparation(c)
+    complete_preparation(c)  # Declining consumes this callback's one-use snapshot.
+    assert not calls
+    assert len(confirmations) == 1
+    assert c.pending_submission is None and not c.confirming
+    assert "allow_online" not in load_preferences(c.root)
+    assert w.generate_button.isEnabled()
+
+    w.generate_button.click()
+    assert not calls and len(confirmations) == 1
+    complete_preparation(c)
+    assert len(calls) == 1 and len(confirmations) == 2
+    assert confirmations[0] == confirmations[1]
+    assert calls[0]["text"] == preview["text"] and calls[0]["allow_online"] is True
+
+
+@pytest.mark.parametrize("field", ["output", "runtime", "pause", "filter", "edit_restore"])
+def test_confirmed_modal_rejects_settings_or_revision_changed_inside_it(
+    desktop, monkeypatch, field
+):
+    w, c, _ = desktop
+    preview = reviewed(w, c)
+    calls, confirmations = [], []
+    monkeypatch.setattr(c, "_start_synthesis", calls.append)
+
+    def confirm(parent, text, settings, sha):
+        assert c.confirming and not w.generate_button.isEnabled()
+        confirmations.append((parent, text, settings, sha))
+        if field == "output":
+            w.output_dir_edit.setText(str(c.root / "different-output"))
+        elif field == "runtime":
+            w.ffmpeg_edit.setText(str(c.root / "different-ffmpeg"))
+        elif field == "pause":
+            w.pause_spin.setValue(120)
+        elif field == "filter":
+            w.filter_check.setChecked(not w.filter_check.isChecked())
+        else:
+            w.speech_edit.insertPlainText(" Changed temporarily.")
+            w.speech_edit.setPlainText(text)
+        return True
+
+    monkeypatch.setattr(controller, "confirm_transmission", confirm)
+    w.generate_button.click()
+    complete_preparation(c)
+    complete_preparation(c)
+    assert len(confirmations) == 1 and confirmations[0][1] == preview["text"]
+    assert not calls
+    assert c.pending_submission is None and not c.confirming
+    assert "allow_online" not in load_preferences(c.root)
+
+
+def test_loaded_history_and_late_other_draft_do_not_enable_regenerate(desktop, monkeypatch):
+    w, c, _ = desktop
+    preview = reviewed(w, c)
+    original_signature = c._signature()
+    audio = c.root / "verified-audio.mp3"
+    audio.write_bytes(b"local verified-output fixture")
+    monkeypatch.setattr(c.player, "load", lambda *_: None)
+    monkeypatch.setattr(c.bilingual, "load", lambda *_: None)
+
+    c._verified({"audio_path": str(audio)}, "Loaded history")
+    assert w.generate_button.text() == controller.tr("Generate Audio")
+    w.speech_edit.setPlainText("This draft has not generated verified audio.")
+    c._verified({"audio_path": str(audio)}, "Late verification", original_signature)
+    assert w.generate_button.text() == controller.tr("Generate Audio")
+    w.speech_edit.setPlainText(preview["text"])
+    assert w.generate_button.text() == controller.tr("Regenerate Audio")
 
 
 def test_resume_rechecks_edge_permission(desktop, monkeypatch):
@@ -148,7 +243,7 @@ def test_resume_rechecks_edge_permission(desktop, monkeypatch):
 
 def test_offline_generation_uses_no_online_permission(desktop, monkeypatch):
     w, c, _ = desktop
-    c.capabilities["kokoro"] = {"available": True}
+    c.capabilities["kokoro"] = {"available": True, "voices": ["am_michael", "af_heart"]}
     w.engine_combo.setCurrentIndex(w.engine_combo.findData("kokoro"))
     reviewed(w, c)
     monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("online dialog"))
@@ -164,7 +259,7 @@ def test_offline_generation_uses_no_online_permission(desktop, monkeypatch):
 def test_missing_offline_runtime_cannot_be_claimed_ready(desktop):
     w, c, _ = desktop
     w.engine_combo.setCurrentIndex(w.engine_combo.findData("kokoro"))
-    reviewed(w, c)
+    w.speech_edit.setPlainText("No offline runtime is installed.")
     assert not w.generate_button.isEnabled()
 
 

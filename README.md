@@ -8,7 +8,7 @@ Lextide is a Python learning project for macOS: prepare a reading script, explic
 
 **0.6.1 is the first public source release.** G1–G6 passed independent engineering validation and user acceptance; the two G6 findings in Edge quotation metadata and mixed English/Chinese preparation were retested and are closed (`G6_PASS` / `USER_ACCEPTED`).
 
-**This working tree is the 0.9.0 stable release candidate (`G9_STABLE_RELEASE_CANDIDATE`).** It adds text checks before synthesis and simplifies English extraction, while retaining one-click generation, Auto engine selection, immediate interface-language changes and manually supplied Chinese subtitles. Independent testing and user acceptance are still required; this candidate is not a claim that v0.9.0 has been published. See the [0.9.0 release notes](docs/release/G9_RELEASE_NOTES.md).
+The latest public stable release is [v0.9.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.9.0). This working tree is the local 0.10.0 development candidate.
 
 The source code is released under the [MIT License](LICENSE). Brand artwork is reserved and governed by [TRADEMARKS.md](TRADEMARKS.md); the exact asset scope is in [ASSETS_LICENSE.md](ASSETS_LICENSE.md). This release is **source only** — it does not include, and does not authorize, a public `.app` distribution.
 
@@ -28,7 +28,7 @@ These screenshots show the accepted 0.6.0 interface, not the current layout. Cur
 - Local MP3 playback with sentence subtitles, adjustable transcript size (12–40 px), light/dark themes.
 - **English Only** (default) or **English + Chinese** subtitle display; import an existing Chinese SRT/TXT, review every mapped cue before saving, and edit Chinese text per cue. Translations stay in separate local JSON; the English SRT and audio remain unchanged.
 
-**Not implemented:** screenshot/image OCR, scanned-PDF OCR, automatic subtitle translation, word-level alignment, cloud accounts, auto-updates and Windows packaging. OCR text obtained elsewhere can be pasted into Studio. Windows development is a separate future project.
+**Not implemented:** screen region capture, scanned-PDF OCR, automatic subtitle translation, word-level alignment, cloud accounts, auto-updates and Windows packaging. Local PNG and JPEG recognition is available in Studio. Windows development is a separate future project.
 
 ## Run from source on macOS
 
@@ -62,6 +62,16 @@ In Settings, select the actual FFmpeg and ffprobe executables if discovery canno
 
 See [text preparation rules and limits](docs/TEXT_PREPARATION.md). The enhanced rules can remove clear translations adjacent to completed English sentences or separated by `|` / `：`, including repeated names and numbers inside those translations. They do not delete an entire mixed line solely because its Chinese-character ratio is high. Ambiguous mixed text, Chinese names that belong inside English sentences, unfamiliar scripts and uncertain OCR breaks require manual review. A Chinese-only document does not produce invented English; an empty result cannot synthesize. The GUI and submission boundary check the final draft before starting: retained Chinese must be edited before an English voice or English Only request can run. The check does not silently change approved text or use a global Chinese ban for other-language voices.
 
+### Local image OCR (macOS development candidate)
+
+In Studio, choose **Import file**, select a PNG, JPG or JPEG, select the languages visible in the image and click **Recognize locally**. Tesseract is the default. Install the executable and local `eng` and `chi_sim` language data separately. For a nonstandard executable, set `LEXTIDE_TESSERACT` to its absolute path before starting the app. English mode requires `eng`. Both Chinese modes use `chi_sim+eng` for Chinese text containing numbers and names.
+
+Check the extracted original and edit the reading draft before generation. English Only can prepare a local English preview. Recognition leaves the original image on disk. Sending the final reading text to Edge requires the separate Studio send action.
+
+The tested layout is clear horizontal single-column print. Mixed-language text can lose or misread a line, especially in columns or rotated images. The language check detects a completely missing expected script. Review each line against the image. [Chinese OCR baseline](docs/g10/OCR_BASELINE.md)
+
+Apple Vision is an optional local provider. The development bundle includes its helper. On the test Mac, accurate recognition exceeded the eight-second limit. Choose Tesseract explicitly if that happens. [Vision setup](docs/g10/VISION_HELPER.md)
+
 ### Existing Chinese subtitles
 
 1. Open an existing verified export in **Listen**. The subtitle display starts as **English Only**; **English + Chinese** is saved independently of the interface language and theme.
@@ -75,13 +85,13 @@ Chinese text is stored under the desktop data directory's `translations/`, bound
 
 | | Edge Online | Kokoro Offline |
 |---|---|---|
-| Default voice / rate | `en-US-GuyNeural` / `-4%` | `af_heart` / `-4%` |
+| CLI default voice / rate | `en-US-GuyNeural` / `-4%` | `af_heart` / `-4%` |
 | Network | The approved speech text and voice parameters are sent to Microsoft Edge TTS | Inference runs without text upload |
 | Setup | Base dependencies + FFmpeg | Separate Python 3.13 environment, model, voices + FFmpeg |
 | Availability | Depends on the remote service; no service guarantee | Depends on installed local runtime/models |
 | Failure | Clear failure; valid completed chunks can be resumed | No automatic online fallback |
 
-**Auto** is a third, explicit selection. It checks Edge connectivity through a voice-catalogue request that contains no document text. A successful check does not guarantee synthesis availability. Auto selects Edge when the check and local prerequisites succeed; otherwise it may select an already-ready Kokoro. It preserves the displayed voice and rate, so generation stays blocked until they are compatible with the chosen engine. Once synthesis starts, errors never trigger an automatic switch to another engine. Explicit Edge and Kokoro selections keep their existing meaning.
+**Auto** is a third, explicit selection. It checks Edge connectivity through a voice-catalogue request that contains no document text. A successful check does not guarantee synthesis availability. Auto selects Edge when the check and local prerequisites succeed; otherwise it may select an already-ready Kokoro. In Studio, choose an American male or female voice. Recommended maps to Guy or Aria on Edge and Michael or Heart on Kokoro when available. Check the engine and voice ID before Generate. A specific voice selection stays pinned until you choose another voice or return to Recommended. Once synthesis starts, errors never trigger an automatic switch to another engine. Explicit Edge and Kokoro selections keep their existing meaning.
 
 Kokoro installation is optional. Use an existing Python 3.13 interpreter; if absent, install it explicitly first:
 
@@ -125,8 +135,8 @@ Use Ctrl-C for safe pause; `tasks cancel` persists a cancellation request. Resum
 
 ```bash
 uv sync --frozen --extra desktop --group dev --group bundle
-.venv/bin/python scripts/build_macos.py --output "$PWD/.artifacts/build-0.9.0"
-open "$PWD/.artifacts/build-0.9.0/dist/Lextide.app"
+.venv/bin/python scripts/build_macos.py --output "$PWD/.artifacts/build-0.10.0"
+open "$PWD/.artifacts/build-0.10.0/dist/Lextide.app"
 ```
 
 The output directory must be new. The builder records the commit, source hashes, bundle inventory and ZIP SHA-256. Python, Qt, icons and translation resources are bundled; **FFmpeg command-line tools and Kokoro runtime/models remain external**. No data belongs inside `.app/Contents`.

@@ -6,6 +6,7 @@ import re
 
 from ..reading import CHINESE_TEXT_MESSAGE, EMPTY_TEXT_MESSAGE
 from .i18n import tr
+from .image_ocr import ERRORS as OCR_ERRORS
 
 # Backend messages are intentionally unchanged; these aliases only affect display.
 _NOTES = {
@@ -46,8 +47,8 @@ _NOTES = {
         "PDF columns, reading order, ligatures and headers/footers may "
         "differ from the page layout; check and edit the preview."
     ),
-    "该 PDF 没有可提取的文本层，当前版本暂不支持 OCR。": (
-        "This PDF has no extractable text layer. OCR is not supported in this version."
+    "该 PDF 没有可提取的文本层。可将页面另存为 PNG 或 JPEG 后导入。": (
+        "This PDF has no text layer. Import a PNG or JPEG of the page to recognize its text."
     ),
     "文件没有可导入的正文文本；请检查内容及提取规则。": (
         "No body text could be imported. Check the source content and extraction rules."
@@ -84,7 +85,9 @@ _NOTES = {
         "The local Kokoro model does not offer this English voice."
     ),
 }
+
 _CODES = {
+    **OCR_ERRORS,
     "INVALID_INPUT": (
         "Invalid input. Check the text, voice, rate and local paths, then preview again."
     ),

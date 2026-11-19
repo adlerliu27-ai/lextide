@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
 from .i18n import tr
+from .listen_keys import ListenKeys
 
 
 def clock_text(milliseconds: int) -> str:
@@ -38,6 +39,7 @@ class LocalPlayer(QObject):
         self.active: int | None = None
         self.loaded_path: Path | None = None
         window.play_button.clicked.connect(self.toggle)
+        self.listen_keys = ListenKeys(window)
         window.seek_slider.setSingleStep(1000)
         window.seek_slider.setPageStep(5000)
         window.seek_slider.valueChanged.connect(self.media.setPosition)
@@ -172,8 +174,5 @@ class LocalPlayer(QObject):
         if watched is self.window.transcript_list and event.type() == QEvent.Type.KeyPress:
             if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self.seek_cue(self.window.transcript_list.currentRow())
-                return True
-            if event.key() == Qt.Key.Key_Space and self.window.play_button.isEnabled():
-                self.toggle()
                 return True
         return super().eventFilter(watched, event)

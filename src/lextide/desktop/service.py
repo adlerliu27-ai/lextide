@@ -215,8 +215,28 @@ def _provenance(request: dict, reviewed: str) -> tuple[str, dict]:
     source = request.get("provenance") or {}
     if not isinstance(source, dict):
         raise InputError("Import provenance must be an object.")
+    if source.get("review_required") is True:
+        raise InputError("Check the partial OCR result before using it.")
     original = _text(source.get("text", source.get("original_text", reviewed)))
     metadata = {}
+    if source.get("review_reason") is not None:
+        confirmation = source.get("ocr_review")
+        if (
+            source.get("review_reason") != "OCR_LANGUAGE_MISMATCH"
+            or source.get("review_required") is not False
+            or not isinstance(confirmation, dict)
+            or confirmation.get("original_sha256") != _sha(original)
+        ):
+            raise InputError("Check the partial OCR result before using it.")
+        corrected = _text(confirmation.get("corrected_text"))
+        if not corrected.strip() or confirmation.get("corrected_sha256") != _sha(corrected):
+            raise InputError("Check the partial OCR result before using it.")
+        metadata["ocr_review"] = {
+            "reason": "OCR_LANGUAGE_MISMATCH",
+            "original_sha256": _sha(original),
+            "corrected_sha256": _sha(corrected),
+            "corrected_text": corrected,
+        }
     for key in ("source_path", "source_name", "source_sha256", "format", "encoding"):
         value = source.get(key)
         if value is not None and (not isinstance(value, str) or len(value) > 4096):
@@ -231,6 +251,10 @@ def _provenance(request: dict, reviewed: str) -> tuple[str, dict]:
         ):
             raise InputError("Invalid import provenance notes.")
         metadata[key] = values
+    if "ocr" in source:
+        from .image_ocr import checked_metadata
+
+        metadata["ocr"] = checked_metadata(source["ocr"])
     title = source.get("title")
     if title is not None and not isinstance(title, str):
         raise InputError("Document title must be text.")
@@ -252,29 +276,39 @@ def _provenance(request: dict, reviewed: str) -> tuple[str, dict]:
         if not isinstance(cleaning, dict) or cleaning.get("mode") not in {"original", "english"}:
             raise InputError("Invalid text preparation record.")
         strength = cleaning.get("cleaning_mode", "conservative")
+        from ..cleaning import RULE_VERSION, TRANSLATION_RULE_VERSION
+
         versions = {
-            "conservative": "english-rules-v1",
-            "remove_chinese_translations": "english-translations-v1",
+            "conservative": ("english-rules-v1", RULE_VERSION),
+            "remove_chinese_translations": ("english-translations-v1", TRANSLATION_RULE_VERSION),
         }
         if not isinstance(strength, str) or strength not in versions:
             raise InputError("Invalid text preparation record.")
         if cleaning["mode"] == "original" and strength != "conservative":
             raise InputError("Invalid text preparation record.")
-        expected_version = versions[strength] if cleaning["mode"] == "english" else "original-v1"
+        allowed = versions[strength] if cleaning["mode"] == "english" else ("original-v1",)
+        version = cleaning.get("version")
         cleaned = _text(cleaning.get("cleaned_text"))
-        if cleaning.get("version") != expected_version or cleaning.get("original_sha256") != _sha(
-            original
-        ):
+        if version not in allowed or cleaning.get("original_sha256") != _sha(original):
             raise InputError("Text preparation provenance does not match the original text.")
         # Save the preparation snapshot, not a new pass of the cleaner after consent.
         record["text_preparation"] = {
-            "version": expected_version,
+            "version": version,
             "mode": cleaning["mode"],
             "original_sha256": _sha(original),
             "cleaned_text": cleaned,
             "cleaned_sha256": _sha(cleaned),
             "reviewed_sha256": _sha(reviewed),
         }
+        if "input_text" in cleaning or "input_sha256" in cleaning:
+            corrected = _text(cleaning.get("input_text"))
+            if "ocr" not in metadata or cleaning.get("input_sha256") != _sha(corrected):
+                raise InputError("OCR correction does not match the preparation input.")
+            record["text_preparation"].update(
+                input_text=corrected,
+                input_sha256=_sha(corrected),
+                positions_relative_to="input_text",
+            )
         if "cleaning_mode" in cleaning:
             record["text_preparation"]["cleaning_mode"] = strength
     return original, record
@@ -653,6 +687,10 @@ async def auto_probe(request: dict) -> dict:
     discovered = engines(request)
     decision = resolve_engine("auto", discovered)
     probe = await probe_edge_reachability() if decision["probe_required"] else None
+    if probe and "american_voice_ids" in probe:
+        for capability in discovered["engines"]:
+            if capability["engine_id"] == "edge-tts":
+                capability["voices"] = probe["american_voice_ids"]
     decision = resolve_engine("auto", discovered, probe)
     return {**discovered, **decision, "decision": decision, "edge_probe": probe}
 
@@ -678,6 +716,15 @@ async def dispatch(request: dict, emit: EventSink | None = None) -> dict:
         if request.get("mode") != "english":
             raise InputError("Unknown text preparation mode.")
         return asdict(clean_english(text, mode=request.get("cleaning_mode", "conservative")))
+    if command == "image_ocr":
+        from .image_ocr import recognize
+
+        return await recognize(
+            _path(request.get("path")),
+            provider=request.get("provider"),
+            language=request.get("language"),
+            allow_partial=True,
+        )
     if command == "import":
         from .importing import DocumentImportError, import_document
 

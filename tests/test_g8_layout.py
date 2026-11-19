@@ -73,11 +73,12 @@ def test_studio_prioritizes_reading_and_retains_local_review_actions(window, app
 
 
 @pytest.mark.parametrize("online", [False, True])
-def test_generate_action_keeps_preferred_width_and_right_alignment(window, app, online):
+@pytest.mark.parametrize("label", ["Generate Audio", "Regenerate Audio"])
+def test_generate_action_keeps_preferred_width_and_right_alignment(window, app, online, label):
     window.show_page("Studio")
     window.online_notice.setText(tr("This reading text will be sent to Microsoft Edge TTS."))
     window.online_notice.setVisible(online)
-    window.generate_button.setText(tr("Send to Edge & Generate" if online else "Generate Audio"))
+    window.generate_button.setText(tr(label))
     app.processEvents()
     generate = window.generate_button
     footer = generate.parentWidget()

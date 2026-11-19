@@ -53,7 +53,7 @@ def test_translated_display_preserves_internal_keys_and_user_content(window):
     assert [window.theme_combo.itemData(i) for i in range(3)] == ["system", "light", "dark"]
     assert [window.language_combo.itemData(i) for i in range(2)] == ["en", "zh_CN"]
     assert [window.clean_mode_combo.itemData(i) for i in range(2)] == ["original", "english"]
-    assert window.clean_button.text() == tr("Apply")
+    assert window.clean_button.text() == tr("Apply to reading text")
     assert window.clean_summary_label.wordWrap()
     assert window.language_hint.wordWrap()
     assert window.library_table.horizontalHeaderItem(1).text() == tr("Status")

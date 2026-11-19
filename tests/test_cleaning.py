@@ -93,7 +93,7 @@ def test_required_cases_are_deterministic(source, expected, removed, warning_cod
     assert isinstance(first, CleanResult)
     assert first.original_text == source
     assert first.cleaned_text == expected
-    assert first.version == "english-rules-v1"
+    assert first.version == "english-rules-v2"
     assert first.removed_chinese_lines == removed
     assert {record["reason"] for record in first.warnings} == warning_codes
     assert asdict(first) == asdict(clean_english(source))
@@ -146,7 +146,8 @@ def test_inline_code_content_is_protected_from_emphasis_rules():
 
 def test_ocr_preserves_list_boundaries_after_removing_markers():
     result = clean_english("This is an\n- example from a list.")
-    assert result.cleaned_text == "This is an\nexample from a list."
+    assert result.cleaned_text == "This is an\n\nexample from a list."
+    assert clean_english(result.cleaned_text).cleaned_text == result.cleaned_text
     assert not any(change["reason"] == "ocr_line_joined" for change in result.changes)
 
 
@@ -156,7 +157,8 @@ def test_parenthetical_removal_does_not_leave_a_space_before_punctuation():
 
 def test_ocr_does_not_join_across_deleted_lines_or_pages():
     result = clean_english("This is an\n中文对照。\nexample.\nThis is an\nPage 2 of 5\nexample.")
-    assert result.cleaned_text == "This is an\nexample.\nThis is an\nexample."
+    assert result.cleaned_text == "This is an\n\nexample.\nThis is an\n\nexample."
+    assert clean_english(result.cleaned_text).cleaned_text == result.cleaned_text
     assert not any(change["reason"] == "ocr_line_joined" for change in result.changes)
 
 

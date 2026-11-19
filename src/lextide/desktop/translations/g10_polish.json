@@ -1,0 +1,13 @@
+{
+  "Regenerate Audio": "重新生成",
+  "Edge requires confirmation before sending this text online.": "使用 Edge 时，生成前会要求确认在线发送文本。",
+  "Create a new audio task. Existing files will be kept.": "创建新的音频任务，保留已有文件。",
+  "Check partial recognition": "核对部分识别结果",
+  "Recognition may be incomplete. Check the text or recognize again.": "识别结果可能不完整，请检查或重新识别。",
+  "Compare with the image and correct missing or incorrect words. Nothing is sent online.": "请对照图片补充遗漏、修正错字。内容不会发送到网络。",
+  "Partial OCR text to review and edit": "待核对和编辑的部分 OCR 文本",
+  "I checked this text against the image": "我已对照图片核对这份文本",
+  "Change language and retry": "更换语言并重新识别",
+  "Use checked text": "使用已核对文本",
+  "Check the partial OCR result before using it.": "请先核对部分 OCR 结果，再使用文本。"
+}

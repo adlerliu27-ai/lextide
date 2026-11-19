@@ -221,7 +221,13 @@ def test_default_runtime_and_override_are_explicit(monkeypatch):
     assert seen[-1] == "/explicit/python"
 
 
-def test_capabilities_static_readiness_does_not_load_model(monkeypatch):
+def test_capabilities_static_readiness_does_not_load_model(monkeypatch, tmp_path):
+    from zipfile import ZipFile
+
+    path = tmp_path / "voices-v1.0.bin"
+    with ZipFile(path, "w") as voices:
+        voices.writestr("am_michael.npy", b"catalog test")
+        voices.writestr("af_heart.npy", b"catalog test")
     monkeypatch.setattr(KokoroEngine, "_runtime_status", lambda self: {"ready": True})
     monkeypatch.setattr(
         adapter,
@@ -230,12 +236,20 @@ def test_capabilities_static_readiness_does_not_load_model(monkeypatch):
             "installed": True,
             "model_id": "test",
             "version": "1",
-            "assets": [{"present": True, "actual_size": 10, "expected_size": 10}],
+            "assets": [
+                {
+                    "filename": path.name,
+                    "path": str(path),
+                    "present": True,
+                    "actual_size": 10,
+                    "expected_size": 10,
+                }
+            ],
         },
     )
     capabilities = KokoroEngine().capabilities()
     assert capabilities.installed and capabilities.available and not capabilities.online
-    assert capabilities.voices == ("af_heart",)
+    assert capabilities.voices == ("am_michael", "af_heart")
     assert any("未验证推理" in note for note in capabilities.notes)
 
 

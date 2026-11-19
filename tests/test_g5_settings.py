@@ -98,7 +98,10 @@ def test_media_path_edit_invalidates_pending_click_and_stale_capabilities(
     desktop, monkeypatch, key
 ):
     w, c, calls = desktop
-    c.capabilities = {"edge-tts": {"available": True}, "kokoro": {"available": True}}
+    c.capabilities = {
+        "edge-tts": {"available": True, "voices": ["en-US-GuyNeural"]},
+        "kokoro": {"available": True},
+    }
     approve(w, c)
     assert w.generate_button.isEnabled()
     monkeypatch.setattr(c, "_start_synthesis", lambda *_: pytest.fail("stale runtime submitted"))
@@ -119,7 +122,10 @@ def test_explicit_paths_propagate_to_synthesis_request(desktop, monkeypatch):
     for key in ("model_dir", "offline_python", "ffmpeg", "ffprobe"):
         getattr(w, f"{key}_edit").setText(f"/local/{key}")
     approve(w, c)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    confirmations = []
+    monkeypatch.setattr(
+        controller, "confirm_transmission", lambda *args: confirmations.append(args) or True
+    )
     requests = []
     monkeypatch.setattr(c, "_start_synthesis", requests.append)
     w.generate_button.click()
@@ -131,6 +137,7 @@ def test_explicit_paths_propagate_to_synthesis_request(desktop, monkeypatch):
     assert len(requests) == 1
     assert requests[0]["text"] == preview["text"]
     assert requests[0]["approved_sha256"] == preview["sha256"]
+    assert confirmations == [(w, preview["text"], requests[0]["settings"], preview["sha256"])]
     assert service._authorize(requests[0], preview["text"], "edge-tts") is True
     assert requests[0]["runtime"] == {
         "model_dir": "/local/model_dir",
@@ -248,14 +255,16 @@ def test_successful_recheck_clears_missing_media_guidance(desktop):
     assert "Media tools unavailable" in w.status_label.text()
     c._engines(
         {
-            "engines": [{"engine_id": "edge-tts", "available": True}],
+            "engines": [
+                {"engine_id": "edge-tts", "available": True, "voices": ["en-US-GuyNeural"]}
+            ],
             "media_tools": {
                 name: {"available": True, "path": f"/local/{name}"}
                 for name in ("ffmpeg", "ffprobe")
             },
         }
     )
-    assert w.status_label.text() == tr("Ready")
+    assert not w.status_label.text() and w.status_label.isHidden()
     for name in ("ffmpeg", "ffprobe"):
         assert tr("{name} · Found: {path}", name=name, path=f"/local/{name}") in (
             w.media_status_label.text()

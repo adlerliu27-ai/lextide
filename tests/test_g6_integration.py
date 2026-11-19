@@ -173,11 +173,18 @@ def test_no_click_no_start_and_edit_revokes_pending_click(desktop, monkeypatch):
     complete_preparation(c)
     assert calls == []
     assert c.pending_submission is None
+    confirmations = []
+    monkeypatch.setattr(
+        controller, "confirm_transmission", lambda *args: confirmations.append(args) or True
+    )
     w.generate_button.click()
     complete_preparation(c)
     assert len(calls) == 1
     assert calls[0]["text"] == w.speech_edit.toPlainText()
     assert calls[0]["approved_sha256"] == hashlib.sha256(calls[0]["text"].encode()).hexdigest()
+    assert confirmations == [
+        (w, calls[0]["text"], calls[0]["settings"], calls[0]["approved_sha256"])
+    ]
 
 
 def test_clean_edit_preview_approved_snapshot(desktop, monkeypatch):
@@ -194,16 +201,20 @@ def test_clean_edit_preview_approved_snapshot(desktop, monkeypatch):
     reviewed = review(w, c, edited)
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    confirmations = []
+    monkeypatch.setattr(
+        controller, "confirm_transmission", lambda *args: confirmations.append(args) or True
+    )
     w.generate_button.click()
     assert not calls
     complete_preparation(c)
     assert calls[0]["text"] == reviewed["text"] == edited
     assert calls[0]["approved_sha256"] == hashlib.sha256(edited.encode()).hexdigest()
+    assert confirmations == [(w, edited, calls[0]["settings"], calls[0]["approved_sha256"])]
     original, record = service._provenance(calls[0], edited)
     assert original == source
     assert record["text_preparation"]["cleaned_text"] == data["cleaned_text"]
-    assert record["text_preparation"]["version"] == "english-translations-v1"
+    assert record["text_preparation"]["version"] == "english-translations-v2"
     assert record["reviewed_sha256"] == calls[0]["approved_sha256"]
 
 
@@ -230,23 +241,35 @@ def test_english_only_selection_extracts_then_requires_review(desktop, monkeypat
     assert w.speech_edit.toPlainText() == "In 1921, Lewis Terman began a study."
     assert c.cleaning["cleaning_mode"] == "remove_chinese_translations"
     assert c.preview is None and not w.approval_check.isChecked()
-    c.capabilities["kokoro"] = {"available": True}
+    c.capabilities["kokoro"] = {"available": True, "voices": ["am_michael", "af_heart"]}
     w.engine_combo.setCurrentIndex(w.engine_combo.findData(engine))
     edited = w.speech_edit.toPlainText() + " This is my final edit."
     preview = review(w, c, edited)
     calls = []
     monkeypatch.setattr(c, "_start_synthesis", calls.append)
-    monkeypatch.setattr(controller, "confirm_transmission", lambda *_: pytest.fail("extra dialog"))
+    confirmations = []
+
+    def confirm(*args):
+        assert engine == "edge-tts", "offline generation must not request online consent"
+        confirmations.append(args)
+        return True
+
+    monkeypatch.setattr(controller, "confirm_transmission", confirm)
     w.generate_button.click()
     assert not calls
     complete_preparation(c)
     assert calls[0]["text"] == edited == preview["text"]
     assert calls[0]["approved_sha256"] == hashlib.sha256(edited.encode()).hexdigest()
     assert calls[0]["allow_online"] is (engine == "edge-tts")
+    assert confirmations == (
+        [(w, edited, calls[0]["settings"], calls[0]["approved_sha256"])]
+        if engine == "edge-tts"
+        else []
+    )
     original, record = service._provenance(calls[0], edited)
     assert original == source
     preparation = record["text_preparation"]
-    assert preparation["version"] == "english-translations-v1"
+    assert preparation["version"] == "english-translations-v2"
     assert preparation["cleaning_mode"] == "remove_chinese_translations"
     assert preparation["reviewed_sha256"] == calls[0]["approved_sha256"]
 
@@ -386,7 +409,7 @@ def test_empty_cleaning_cannot_preview_or_start(desktop):
 
 def test_kokoro_receives_edited_text_without_online_consent(desktop, monkeypatch):
     _, w, c, _ = desktop
-    c.capabilities["kokoro"] = {"available": True}
+    c.capabilities["kokoro"] = {"available": True, "voices": ["am_michael", "af_heart"]}
     w.engine_combo.setCurrentIndex(w.engine_combo.findData("kokoro"))
     preview = review(w, c, "Python is useful. This is my final edit.")
     monkeypatch.setattr(

@@ -109,3 +109,12 @@ license clearance or legal conclusion is claimed here; the earlier Kokoro/eSpeak
 Selected runtime artwork/tokens are in `src/lextide/desktop/assets/`; exact current
 paths, hashes and rights status are listed in `ASSET_RELEASE_MANIFEST.md` above.
 Original AI/SVG research assets and full design HTML/PDF were not edited or vendored wholesale.
+
+## Optional image recognition on macOS (G10)
+
+Image import can run a separately installed Tesseract executable and local language data.
+The benchmark used Tesseract 5.5.3 and the official tessdata_fast eng and chi_sim files.
+Their upstream license texts are available from [Tesseract](https://github.com/tesseract-ocr/tesseract/blob/main/LICENSE)
+and [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast/blob/main/LICENSE).
+Neither the executable nor its language models are included in this bundle.
+The Lextide Swift helper uses Apple's system Vision and ImageIO frameworks.

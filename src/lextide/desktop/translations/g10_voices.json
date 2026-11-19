@@ -1,0 +1,10 @@
+{
+  "American voice": "美式声线",
+  "American male": "美式男声",
+  "American female": "美式女声",
+  "Recommended · {name}": "推荐 · {name}",
+  "Edge online · {voice}": "Edge 在线 · {voice}",
+  "Kokoro offline · {voice}": "Kokoro 离线 · {voice}",
+  "{voice} is unavailable on this engine. Select a voice to continue.": "当前引擎不支持 {voice}。请选择可用音色后继续。",
+  "No matching American voice is available. Choose another voice type or engine.": "没有符合该类别的可用美式音色。请选择其他声线类别或引擎。"
+}

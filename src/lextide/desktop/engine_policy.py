@@ -162,7 +162,22 @@ async def probe_edge_reachability() -> dict:
             )
         ):
             # The public API does not expose a success HTTP status; do not invent it.
-            return _probe_result(True, "reachable", _REACHABILITY_NOTICE)
+            from ..voices import AMERICAN_VOICES
+
+            supported = [
+                item.voice_id
+                for item in AMERICAN_VOICES
+                if item.online
+                and any(
+                    row["ShortName"] == item.voice_id
+                    and row.get("Locale") == item.locale
+                    and str(row.get("Gender")).lower() == item.gender
+                    for row in voices
+                )
+            ]
+            return _probe_result(True, "reachable", _REACHABILITY_NOTICE) | {
+                "american_voice_ids": supported
+            }
         return _probe_result(
             False,
             "invalid_catalog",

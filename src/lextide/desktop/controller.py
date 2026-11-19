@@ -8,15 +8,19 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QTextCursor
-from PySide6.QtWidgets import QDialogButtonBox, QFileDialog, QInputDialog, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFileDialog, QMessageBox, QVBoxLayout
 
 from ..config import Settings
 from ..errors import StudioError
 from ..reading import validate_reading_text
+from ..voices import AMERICAN_VOICES
 from .bilingual_ui import BilingualController
+from .clipboard import ImageStager, StudioPasteKeys, read_mime
+from .engine_policy import resolve_engine
 from .i18n import current_language, join_translated, tr
 from .localized import QCheckBox, QDialog, QLabel, QPlainTextEdit, bind_text
 from .messages import cleaning_reason, localize_error, localize_note
+from .ocr_ui import choose_image_ocr, review_partial_ocr
 from .player import LocalPlayer
 from .preferences import load_preferences, save_preferences
 from .process import WorkerClient
@@ -71,19 +75,34 @@ class Controller(QObject):
         self.preferences = load_preferences(self.root)
         self.workers: set[WorkerClient] = set()
         self.synthesis: WorkerClient | None = None
+        self.ocr_request = None
+        self.ocr_worker = None
+        self.clipboard_scratch = None
+        self.staged_callback = None
+        self.image_stager = ImageStager()
+        self.image_stager.ready.connect(self._clipboard_staged)
+        self.paste_keys = StudioPasteKeys(window, self.paste_clipboard)
         self.active_task: str | None = None
         self.preview: dict | None = None
         self.preview_signature: str | None = None
         self.revision = 0
         self.provenance: dict = {}
         self.cleaning: dict | None = None
+        # A local preview shares the speech editor but can be discarded back to
+        # the exact preceding draft and its provenance, including OCR corrections.
+        self.draft_before_preview: tuple[str, dict | None, str | None] | None = None
+        self.applied_clean_text: str | None = None
         self.history: list[dict] = []
         self.capabilities: dict[str, dict] = {}
         self.active_title = ""
         self.last_verified: dict | None = None
+        self.generated_outputs: dict[str, str] = {}
+        self.generation_signature: str | None = None
         self.closing = False
         self.confirming = False
         self.auto_decision = None
+        self.auto_evidence = None
+        self.pinned_voice = None
         self.auto_probe_revision = 0
         self.pending_submission = None
         self.pending_clean = None
@@ -110,10 +129,12 @@ class Controller(QObject):
             button.clicked.connect(self.import_file)
         for button in (w.new_project_button, w.overview_new_button):
             button.clicked.connect(self.new_draft)
-        w.paste_source_button.clicked.connect(self.paste_text)
+        w.cancel_ocr_button.clicked.connect(self.cancel_image_ocr)
+        w.paste_source_button.clicked.connect(self.paste_clipboard)
         w.speech_edit.textChanged.connect(self._invalidate)
         w.engine_combo.currentIndexChanged.connect(self._engine_changed)
-        w.voice_combo.currentTextChanged.connect(self._invalidate)
+        w.gender_combo.currentIndexChanged.connect(self._gender_changed)
+        w.voice_combo.currentIndexChanged.connect(self._voice_changed)
         w.rate_spin.valueChanged.connect(self._invalidate)
         w.filter_check.toggled.connect(self._invalidate)
         w.pause_spin.valueChanged.connect(self._invalidate)
@@ -141,6 +162,7 @@ class Controller(QObject):
         w.font_combo.currentIndexChanged.connect(self._save_font_size)
         w.subtitle_mode_combo.currentIndexChanged.connect(self._save_subtitle_mode)
         w.clean_button.clicked.connect(self.apply_cleaning)
+        w.discard_preview_button.clicked.connect(self.discard_clean_preview)
         w.clean_mode_combo.currentIndexChanged.connect(self._cleaning_mode_changed)
         w.model_refresh_button.clicked.connect(self.refresh_engines)
         w.library_refresh_button.clicked.connect(self.refresh_history)
@@ -175,6 +197,10 @@ class Controller(QObject):
         w.subtitle_mode_combo.setCurrentIndex(
             w.subtitle_mode_combo.findData(self.preferences["subtitle_mode"])
         )
+        with QSignalBlocker(w.gender_combo):
+            w.gender_combo.setCurrentIndex(
+                w.gender_combo.findData(self.preferences["voice_gender"])
+            )
         w.pause_spin.setValue(0)
         self._engine_changed()
 
@@ -192,8 +218,10 @@ class Controller(QObject):
 
     def _runtime_changed(self):
         self.capabilities.clear()
+        self.auto_evidence = None
         self.auto_decision = None
         self.auto_probe_revision += 1
+        self._refresh_voices()
         self.w.model_status_label.setText(tr("Local paths changed. Check local status again."))
         self.w.media_status_label.setText(
             tr("Local paths changed. Check FFmpeg and ffprobe again.")
@@ -203,7 +231,7 @@ class Controller(QObject):
     def _settings(self):
         return {
             "engine": self._effective_engine(),
-            "voice": self.w.voice_combo.currentText().strip(),
+            "voice": self._selected_voice_id(),
             "rate": f"{self.w.rate_spin.value():+d}%",
             "timeout": 90,
         }
@@ -254,19 +282,23 @@ class Controller(QObject):
             engine == "kokoro" and cap.get("available") is not True
         ):
             return False
-        voices = cap.get("voices", [])
-        if engine == "kokoro" and voices and self.w.voice_combo.currentText() not in voices:
-            return False
-        if engine == "edge-tts" and not self.w.voice_combo.currentText().endswith("Neural"):
+        if self._selected_voice_id() not in [v.voice_id for v in self._voice_choices(engine)]:
             return False
         low, high = cap.get("rate_range", [-50, 100])
         return low <= self.w.rate_spin.value() <= high
 
     def _gate(self, *_):
-        engine = self._effective_engine()
+        settings = self._settings()
+        engine = settings["engine"]
         online = engine == "edge-tts"
+        output = self.generated_outputs.get(self._signature())
         self.w.generate_button.setText(
-            tr("Send to Edge && Generate") if online else tr("Generate Audio")
+            tr("Regenerate Audio") if output and Path(output).is_file() else tr("Generate Audio")
+        )
+        self.w.generate_button.setToolTip(
+            tr("Edge requires confirmation before sending this text online.")
+            if online
+            else tr("Create a new audio task. Existing files will be kept.")
         )
         self.w.online_notice.setText(
             tr("This reading text will be sent to Microsoft Edge TTS.") if online else ""
@@ -284,6 +316,8 @@ class Controller(QObject):
                     "Select a voice and rate compatible with the chosen engine. "
                     "No settings were changed."
                 )
+        elif online and self.capabilities.get(engine, {}).get("available") is False:
+            reason = "Edge local requirements are not ready. Check the media tools."
         elif engine == "kokoro" and not ready:
             reason = (
                 "Offline engine is not ready. Check Settings and select a "
@@ -291,7 +325,37 @@ class Controller(QObject):
             )
         else:
             reason = "Will use Edge online" if online else "Will use Kokoro offline"
-        self.w.engine_decision_status.setText(tr(reason))
+        decision = tr(reason)
+        voice = settings["voice"]
+        if ready:
+            decision = tr(
+                "Edge online · {voice}" if online else "Kokoro offline · {voice}", voice=voice
+            )
+        elif engine and self.pinned_voice and not voice:
+            decision = tr(
+                "{voice} is unavailable on this engine. Select a voice to continue.",
+                voice=self.pinned_voice,
+            )
+        elif engine and self.capabilities.get(engine, {}).get("available") and not voice:
+            decision = tr(
+                "No matching American voice is available. Choose another voice type or engine."
+            )
+        self.w.engine_decision_status.setText(decision)
+        if ready:
+            name = next(v.display_name for v in AMERICAN_VOICES if v.voice_id == voice)
+            summary = tr(
+                "Edge online · {voice} · Rate {rate}"
+                if online
+                else "Kokoro offline · {voice} · Rate {rate}",
+                voice=name,
+                rate=settings["rate"],
+            )
+        elif self.w.engine_combo.currentData() == "auto" and self.auto_decision is None:
+            summary = tr("Checking engine…")
+        else:
+            summary = tr("Check speech settings")
+        self.w.generation_summary.setText(summary)
+        self.w.generation_summary.setToolTip(decision)
         issue = self._reading_issue()
         if issue and self.w.speech_edit.toPlainText().strip():
             self.w.studio_status_label.setText(tr(issue))
@@ -303,16 +367,50 @@ class Controller(QObject):
             and not self.confirming
             and not self.closing
             and self.pending_clean is None
+            and self.ocr_request is None
         )
-        self.w.clean_button.setEnabled(
-            not self.closing
-            and not self.confirming
-            and not self.synthesis
-            and self.pending_clean is None
+        self._show_clean_actions()
+
+    def _show_clean_actions(self):
+        english = self.w.clean_mode_combo.currentData() == "english"
+        previewing = self.draft_before_preview is not None
+        draft = self.w.speech_edit.toPlainText()
+        if previewing:
+            action = tr("Apply to reading text")
+            self.w.reading_heading.setText(tr("English preview"))
+        else:
+            self.w.reading_heading.setText(tr("Reading text"))
+            if not english:
+                action = tr("Restore original")
+            elif self.applied_clean_text is None:
+                action = tr("Preview English")
+            else:
+                action = tr("Re-apply English Only")
+        self.w.clean_button.setText(action)
+        if english:
+            show_action = previewing or (
+                bool(self.w.source_edit.toPlainText() or draft) and draft != self.applied_clean_text
+            )
+        else:
+            show_action = bool(self.w.source_edit.toPlainText()) and (
+                draft != self.w.source_edit.toPlainText()
+            )
+        enabled = not (
+            self.closing
+            or self.confirming
+            or self.synthesis
+            or self.pending_clean
+            or self.ocr_request
         )
+        self.w.clean_button.setVisible(show_action)
+        self.w.clean_button.setEnabled(enabled and (not previewing or bool(draft.strip())))
+        self.w.discard_preview_button.setVisible(previewing)
+        self.w.discard_preview_button.setEnabled(enabled)
 
     def _reading_issue(self):
         """Check the visible final draft without changing it or starting a worker."""
+        if self.provenance.get("review_required") is True:
+            return "Check the partial OCR result before using it."
         try:
             validate_reading_text(
                 self.w.speech_edit.toPlainText(),
@@ -327,6 +425,8 @@ class Controller(QObject):
         self.auto_probe_revision += 1
         revision, runtime = self.auto_probe_revision, self._runtime()
         self.auto_decision = None
+        self.auto_evidence = None
+        self._refresh_voices()
         self._invalidate()
 
         def completed(data):
@@ -337,16 +437,11 @@ class Controller(QObject):
                 or self.w.engine_combo.currentData() != "auto"
             ):
                 return
-            self.auto_decision = data["decision"]
             self.capabilities = {e["engine_id"]: e for e in data.get("engines", [])}
-            engine = self._effective_engine()
-            # Auto does not silently change the voice, rate, pause or filter.
-            current = self.w.voice_combo.currentText()
-            with QSignalBlocker(self.w.voice_combo):
-                self.w.voice_combo.clear()
-                self.w.voice_combo.addItems(self.capabilities.get(engine, {}).get("voices", []))
-                self.w.voice_combo.setCurrentText(current)
-            self.w.filter_check.setEnabled(engine == "kokoro")
+            self.auto_evidence = data
+            self._resolve_auto_voice()
+            self._refresh_voices()
+            self.w.filter_check.setEnabled(self._effective_engine() == "kokoro")
             self._invalidate()
 
         def failed(_message):
@@ -364,6 +459,81 @@ class Controller(QObject):
             on_error=failed,
         )
 
+    def _voice_choices(self, engine):
+        cap = self.capabilities.get(engine)
+        candidates = [
+            v
+            for v in AMERICAN_VOICES
+            if v.engine_id == engine and v.gender == self.w.gender_combo.currentData()
+        ]
+        if cap is None and engine == "edge-tts" and self.w.engine_combo.currentData() != "auto":
+            # Explicit Edge can use the vetted catalogue snapshot before local discovery.
+            return candidates
+        if not cap or not cap.get("available"):
+            return []
+        return [v for v in candidates if v.voice_id in cap.get("voices", [])]
+
+    def _selected_voice_id(self):
+        combo = self.w.voice_combo
+        if combo.currentIndex() < 0:
+            return ""
+        # The displayed recommendation stores its resolved provider ID too.
+        return combo.currentData() or ""
+
+    def _refresh_voices(self):
+        choices = self._voice_choices(self._effective_engine())
+        combo = self.w.voice_combo
+        with QSignalBlocker(combo):
+            combo.clear()
+            if choices:
+                first = choices[0]
+                combo.addItem(tr("Recommended · {name}", name=first.display_name), first.voice_id)
+                for voice in choices:
+                    combo.addItem(voice.display_name, voice.voice_id)
+                if self.pinned_voice:
+                    # A concrete choice survives an engine switch, but cannot authorize
+                    # its replacement. Leave the selection empty until the user chooses.
+                    index = next(
+                        (
+                            i
+                            for i in range(1, combo.count())
+                            if combo.itemData(i) == self.pinned_voice
+                        ),
+                        -1,
+                    )
+                    combo.setCurrentIndex(index)
+            combo.setEnabled(bool(choices))
+
+    def _resolve_auto_voice(self):
+        evidence = self.auto_evidence
+        if evidence is None:
+            return
+        status = dict(evidence)
+        status["engines"] = [
+            cap | {"available": bool(self._voice_choices(cap["engine_id"]))}
+            for cap in evidence["engines"]
+        ]
+        self.auto_decision = resolve_engine("auto", status, evidence.get("edge_probe"))
+        if not self.auto_decision["ready"] and evidence.get("decision", {}).get("ready"):
+            self.auto_decision["reason"] = (
+                "No matching American voice is available. Choose another voice type or engine."
+            )
+            self.auto_decision["reason_code"] = "no_matching_voice"
+
+    def _gender_changed(self, *_):
+        self.pinned_voice = None
+        self.preferences["voice_gender"] = self.w.gender_combo.currentData()
+        self._save_preferences()
+        if self.w.engine_combo.currentData() == "auto":
+            self._resolve_auto_voice()
+            self.w.filter_check.setEnabled(self._effective_engine() == "kokoro")
+        self._refresh_voices()
+        self._invalidate()
+
+    def _voice_changed(self, index):
+        self.pinned_voice = self.w.voice_combo.currentData() if index > 0 else None
+        self._invalidate()
+
     def _engine_changed(self, *_):
         self.auto_probe_revision += 1
         if self.w.engine_combo.currentData() == "auto":
@@ -371,16 +541,10 @@ class Controller(QObject):
             return
         self.auto_decision = None
         kokoro = self.w.engine_combo.currentData() == "kokoro"
-        with QSignalBlocker(self.w.voice_combo):
-            self.w.voice_combo.clear()
-            capabilities = self.capabilities.get(self.w.engine_combo.currentData(), {})
-            self.w.voice_combo.addItems(
-                list(capabilities.get("voices", []))
-                or (["af_heart"] if kokoro else ["en-US-GuyNeural"])
-            )
-            self.w.voice_combo.setCurrentText("af_heart" if kokoro else "en-US-GuyNeural")
-            rate_range = capabilities.get("rate_range", [-50, 100])
-            self.w.rate_spin.setRange(*rate_range)
+        self.auto_evidence = None
+        self._refresh_voices()
+        cap = self.capabilities.get(self._effective_engine(), {})
+        self.w.rate_spin.setRange(*cap.get("rate_range", [-50, 100]))
         self.w.filter_check.setEnabled(kokoro)
         self._invalidate()
         if kokoro and not self.capabilities.get("kokoro", {}).get("available"):
@@ -403,6 +567,8 @@ class Controller(QObject):
                 return
         self.provenance = {}
         self.cleaning = None
+        self.applied_clean_text = None
+        self.draft_before_preview = None
         self.w.clean_summary_label.clear()
         self.w.source_edit.clear()
         self.w.speech_edit.clear()
@@ -416,14 +582,19 @@ class Controller(QObject):
         if not self._confirm_replacement():
             return
         self.cleaning = None
+        self.applied_clean_text = None
+        self.draft_before_preview = None
         self.w.clean_summary_label.clear()
+        self._replace_reading_text(self.w.source_edit.toPlainText())
+
+    def _replace_reading_text(self, text):
         cursor = self.w.speech_edit.textCursor()
         cursor.beginEditBlock()
         cursor.select(QTextCursor.SelectionType.Document)
-        cursor.insertText(self.w.source_edit.toPlainText())
+        cursor.insertText(text)
         cursor.endEditBlock()
 
-    def _confirm_replacement(self):
+    def _confirm_replacement(self, *, preview=False):
         if self.w.speech_edit.toPlainText() == self.w.source_edit.toPlainText():
             return True
         if self.cleaning and self.w.speech_edit.toPlainText() == self.cleaning.get("cleaned_text"):
@@ -431,22 +602,33 @@ class Controller(QObject):
         return (
             QMessageBox.question(
                 self.w,
-                tr("Replace edited speech text?"),
-                tr(
-                    "This replaces your current speech draft with a new version "
-                    "of the original text. "
-                    "You can use Undo afterwards. Existing tasks are unchanged."
-                ),
+                tr("Preview from the original text?")
+                if preview
+                else tr("Replace edited speech text?"),
+                tr("Your edits will be kept. Discard the preview to return to this draft.")
+                if preview
+                else tr("This replaces the edits in the reading pane. You can use Undo."),
             )
             == QMessageBox.StandardButton.Yes
         )
 
     def _cleaning_mode_changed(self, *_):
-        # Selection prepares a local preview, never a TTS request. Edits remain
-        # protected by the same replacement confirmation used by Apply/Reset.
+        english = self.w.clean_mode_combo.currentData() == "english"
         self._invalidate()
-        if self.w.source_edit.toPlainText().strip() or self.w.speech_edit.toPlainText().strip():
-            self.apply_cleaning()
+        if self.draft_before_preview is not None:
+            if self._confirm_replacement():
+                self.discard_clean_preview()
+                return
+        elif self.w.source_edit.toPlainText().strip() or self.w.speech_edit.toPlainText().strip():
+            if self._prepare_cleaning(preview=english) is not False:
+                return
+        else:
+            return
+        # The user kept their edit. Restore the selection as well as the draft.
+        combo = self.w.clean_mode_combo
+        with QSignalBlocker(combo):
+            combo.setCurrentIndex(combo.findData("original" if english else "english"))
+        self._gate()
 
     def _cleaning_strength(self):
         return (
@@ -455,9 +637,53 @@ class Controller(QObject):
             else "conservative"
         )
 
+    def discard_clean_preview(self):
+        if self.draft_before_preview is None:
+            return
+        draft, self.cleaning, self.applied_clean_text = self.draft_before_preview
+        self.draft_before_preview = None
+        self._replace_reading_text(draft)
+        self._invalidate()
+        if self.cleaning:
+            self._show_clean_report(self.cleaning)
+        else:
+            self.w.clean_summary_label.clear()
+            bind_text(
+                self.w.changes_edit,
+                join_translated(
+                    "\n",
+                    (
+                        localize_note(x)
+                        for x in self.provenance.get("changes", [])
+                        + self.provenance.get("warnings", [])
+                    ),
+                ),
+                setter="setPlainText",
+            )
+
+    def _adopt_clean_preview(self):
+        self.applied_clean_text = self.w.speech_edit.toPlainText()
+        self.draft_before_preview = None
+        self._show_clean_report(self.cleaning)
+        self._gate()
+
     def apply_cleaning(self):
-        # Preparation is an explicit local action, always before preview and consent.
-        if self.confirming or self.closing or self.synthesis or self.pending_clean is not None:
+        if self.draft_before_preview is not None:
+            self._adopt_clean_preview()
+        else:
+            self._prepare_cleaning(
+                preview=self.w.clean_mode_combo.currentData() == "english"
+                and self.applied_clean_text is None
+            )
+
+    def _prepare_cleaning(self, *, preview):
+        if (
+            self.confirming
+            or self.closing
+            or self.synthesis
+            or self.pending_clean is not None
+            or self.ocr_request
+        ):
             return
         # Qt normalizes CRLF and paragraph separators for display. Keep the
         # importer/pasted-source snapshot exact for provenance and its hash.
@@ -467,9 +693,22 @@ class Controller(QObject):
         if not source.strip():
             self._error(tr("Add source text before preparing an English draft."))
             return
-        if self.w.source_edit.toPlainText() and not self._confirm_replacement():
-            return
         mode = self.w.clean_mode_combo.currentData()
+        cleaning_input = source
+        corrected_ocr = mode == "english" and bool(self.provenance.get("ocr"))
+        if corrected_ocr:
+            if not preview and not self._confirm_replacement():
+                return False
+            draft = self.w.speech_edit.toPlainText()
+            if self.cleaning and draft == self.cleaning["cleaned_text"]:
+                cleaning_input = self.cleaning.get("input_text", source)
+            elif draft != self.w.source_edit.toPlainText():
+                cleaning_input = draft
+            if not cleaning_input.strip():
+                self._error(tr("Add source text before preparing an English draft."))
+                return
+        elif self.w.source_edit.toPlainText() and not self._confirm_replacement(preview=preview):
+            return False
         strength = self._cleaning_strength()
         self._invalidate()
         revision = self.revision
@@ -482,7 +721,15 @@ class Controller(QObject):
             if self.pending_clean is not token or self.closing:
                 return
             self.pending_clean = None
-            self._cleaned(data, revision, source, mode, strength)
+            self._cleaned(
+                data,
+                revision,
+                source,
+                mode,
+                strength,
+                cleaning_input if corrected_ocr else None,
+                preview=preview,
+            )
             self._gate()
 
         def failed(message):
@@ -492,12 +739,22 @@ class Controller(QObject):
                 self._error(message)
 
         self._request(
-            {"command": "clean", "text": source, "mode": mode, "cleaning_mode": strength},
+            {"command": "clean", "text": cleaning_input, "mode": mode, "cleaning_mode": strength},
             completed,
             on_error=failed,
         )
 
-    def _cleaned(self, data, revision, source, mode, strength="remove_chinese_translations"):
+    def _cleaned(
+        self,
+        data,
+        revision,
+        source,
+        mode,
+        strength="remove_chinese_translations",
+        cleaning_input=None,
+        *,
+        preview=False,
+    ):
         if (
             revision != self.revision
             or mode != self.w.clean_mode_combo.currentData()
@@ -512,6 +769,15 @@ class Controller(QObject):
             return
         self.w.source_edit.setPlainText(source)
         self.provenance["text"] = source
+        if preview:
+            self.draft_before_preview = (
+                self.w.speech_edit.toPlainText(),
+                self.cleaning,
+                self.applied_clean_text,
+            )
+        self.applied_clean_text = (
+            data["cleaned_text"] if not preview and mode == "english" else None
+        )
         self.cleaning = {k: v for k, v in data.items() if k != "original_text"}
         self.cleaning.update(
             {
@@ -520,17 +786,22 @@ class Controller(QObject):
                 "original_sha256": hashlib.sha256(source.encode()).hexdigest(),
             }
         )
-        cursor = self.w.speech_edit.textCursor()
-        cursor.beginEditBlock()
-        cursor.select(QTextCursor.SelectionType.Document)
-        cursor.insertText(data["cleaned_text"])
-        cursor.endEditBlock()
+        if cleaning_input is not None:
+            self.cleaning.update(
+                input_text=cleaning_input,
+                input_sha256=hashlib.sha256(cleaning_input.encode()).hexdigest(),
+                positions_relative_to="input_text",
+            )
+        self._replace_reading_text(data["cleaned_text"])
         self._invalidate()  # Also invalidates approval when the resulting text is identical.
+        self._show_clean_report(data)
+        self.w.status_label.clear()
+
+    def _show_clean_report(self, data):
         removed = data.get("removed_chinese_segments", 0) or data["removed_chinese_lines"]
         summary = tr(
-            "Removed {removed} Chinese passages · {count:,} characters to read",
+            "Chinese passages removed: {removed}",
             removed=removed,
-            count=len(data["cleaned_text"]),
         )
         details = [
             tr(
@@ -544,7 +815,7 @@ class Controller(QObject):
             details.append(
                 tr("No English speech text remains. Add or edit text before previewing.")
             )
-        self.w.clean_summary_label.setText(
+        summary = (
             tr(
                 "{summary} · Check the final reading text ({count} warnings)",
                 summary=summary,
@@ -553,12 +824,14 @@ class Controller(QObject):
             if details
             else summary
         )
+        if self.draft_before_preview is not None:
+            summary = tr("{summary} · Generate Audio also uses this preview.", summary=summary)
+        self.w.clean_summary_label.setText(summary)
         bind_text(
             self.w.changes_edit,
             join_translated("\n", details) or tr("No review warnings."),
             setter="setPlainText",
         )
-        self.w.status_label.setText(tr("Check the final reading text, then generate audio."))
 
     def _request(self, payload, callback=None, *, timeout=60_000, on_error=None):
         client = WorkerClient(payload, self.root / "requests", timeout_ms=timeout, parent=self)
@@ -572,6 +845,10 @@ class Controller(QObject):
 
     def _worker_finished(self, client):
         self.workers.discard(client)
+        if client is self.ocr_worker:
+            # Its result may still be open in a nested partial-review dialog.
+            # Keep the review token, but never interrupt a deleted Qt worker.
+            self.ocr_worker = None
         if client is self.synthesis:
             self.synthesis = None
             self.w.set_busy(False)
@@ -591,10 +868,20 @@ class Controller(QObject):
             self.w.show_error(tr("Operation not completed"), message)
 
     def import_file(self):
+        if self.ocr_request is not None:
+            self.w.show_page("Studio")
+            self.w.cancel_ocr_button.setFocus()
+            return
         path, _ = QFileDialog.getOpenFileName(
-            self.w, tr("Import a local document"), "", tr("Documents (*.txt *.md *.docx *.pdf)")
+            self.w,
+            tr("Import a local document or image"),
+            "",
+            tr("Documents and images (*.txt *.md *.docx *.pdf *.png *.jpg *.jpeg)"),
         )
         if not path:
+            return
+        if Path(path).suffix.lower() in {".png", ".jpg", ".jpeg"}:
+            self._import_image(path)
             return
         revision = self.revision
         self.w.status_label.setText(tr("Extracting the document locally. Nothing is uploaded."))
@@ -607,7 +894,136 @@ class Controller(QObject):
             lambda data: self._imported(data, revision),
         )
 
-    def _imported(self, data, revision):
+    def _import_image(self, path=None, *, snapshot=None, options=None):
+        options = options or choose_image_ocr(
+            self.w,
+            has_draft=bool(self.w.source_edit.toPlainText() or self.w.speech_edit.toPlainText()),
+        )
+        if not options:
+            return
+        self._invalidate()  # An earlier generation click cannot authorize a later OCR result.
+        revision = self.revision
+        token = object()
+        self.ocr_request = token
+        self.w.show_page("Studio")
+        self.w.ocr_progress.show()
+        self._gate()
+
+        def finish():
+            if self.closing or self.ocr_request is not token:
+                return False
+            self.ocr_request = self.ocr_worker = None
+            self._release_clipboard_image()
+            self.w.ocr_progress.hide()
+            self._gate()
+            return True
+
+        consumed = False
+
+        def completed(data):
+            nonlocal consumed
+            if consumed or self.closing or self.ocr_request is not token:
+                return
+            consumed = True
+            if self.revision != revision:
+                if finish():
+                    self._imported(data, revision)  # Existing late-edit rejection.
+                return
+            reading_text = None
+            if data.get("review_required") is True:
+                self.w.ocr_progress.hide()
+                decision = review_partial_ocr(self.w, data["text"], options)
+                if self.closing or self.ocr_request is not token:
+                    return
+                if self.revision != revision:
+                    if finish():
+                        self._imported(data, revision)
+                    return
+                if not decision:
+                    finish()
+                    return
+                if decision["action"] == "retry":
+                    if finish():
+                        self._import_image(path, snapshot=snapshot, options=decision["options"])
+                    return
+                reading_text = decision["text"]
+                data = data | {
+                    "review_required": False,
+                    "ocr_review": {
+                        "original_sha256": hashlib.sha256(data["text"].encode()).hexdigest(),
+                        "corrected_text": reading_text,
+                        "corrected_sha256": hashlib.sha256(reading_text.encode()).hexdigest(),
+                    },
+                }
+            if not finish():
+                return
+            meta = data["ocr"]
+            self.w.ocr_diagnostic.setText(
+                tr(
+                    "Last image recognition · {provider} · {languages} · {ms} ms",
+                    provider=meta["provider"],
+                    languages=", ".join(meta["effective_languages"]),
+                    ms=meta["duration_ms"],
+                )
+            )
+            self.w.ocr_diagnostic.show()
+            if snapshot is not None:
+                # A temporary path is not a durable user-selected source file.
+                data = data | {"source_path": None, "source_name": tr("Clipboard image")}
+            self._imported(data, revision, reading_text=reading_text)
+
+        def failed(message):
+            if finish():
+                self._error(message)
+
+        def recognize(input_path):
+            worker = self._request(
+                {"command": "image_ocr", "path": input_path, **options},
+                completed,
+                timeout=45_000,
+                on_error=failed,
+            )
+            if self.ocr_request is token:
+                self.ocr_worker = worker
+
+        if snapshot is None:
+            recognize(path)
+        else:
+            self.staged_callback = recognize
+            self.image_stager.start(token, snapshot)
+
+    def _release_clipboard_image(self):
+        self.staged_callback = None
+        if self.clipboard_scratch is not None:
+            self.clipboard_scratch.cleanup()
+            self.clipboard_scratch = None
+
+    def _clipboard_staged(self, token, folder, path):
+        if self.closing or self.ocr_request is not token:
+            if folder is not None:
+                folder.cleanup()
+            return
+        if path is None:
+            self.cancel_image_ocr()
+            self._error(tr("Choose a valid clipboard image within 32 MiB and 24 megapixels."))
+            return
+        self.clipboard_scratch = folder
+        recognize, self.staged_callback = self.staged_callback, None
+        recognize(path)
+
+    def cancel_image_ocr(self):
+        if self.ocr_request is None:
+            return
+        self.ocr_request = None
+        if self.ocr_worker is not None:
+            self.ocr_worker.interrupt()
+            self.ocr_worker = None
+        self._release_clipboard_image()
+        self.w.ocr_progress.hide()
+        self.w.status_label.setText(tr("Image recognition cancelled."))
+        self._gate()
+
+    def _imported(self, data, revision, *, reading_text=None):
         if self.revision != revision:
             self._error(
                 tr(
@@ -616,13 +1032,18 @@ class Controller(QObject):
                 )
             )
             return
+        if data.get("review_required") is True:
+            self._error(tr("Check the partial OCR result before using it."))
+            return
         self.provenance = data.copy()
         self.cleaning = None
+        self.applied_clean_text = None
+        self.draft_before_preview = None
         self.w.clean_summary_label.clear()
         self.w.source_edit.setPlainText(data["text"])
-        self.w.speech_edit.setPlainText(data["text"])
+        self.w.speech_edit.setPlainText(data["text"] if reading_text is None else reading_text)
         self.w.source_path_label.setText(data.get("source_name") or tr("Pasted text"))
-        self.w.source_path_label.setToolTip(data.get("source_path", ""))
+        self.w.source_path_label.setToolTip(data.get("source_path") or "")
         self.w.title_edit.setText(data.get("source_name", tr("Untitled session")))
         bind_text(
             self.w.changes_edit,
@@ -631,34 +1052,58 @@ class Controller(QObject):
             ),
             setter="setPlainText",
         )
-        self.w.status_label.setText(
-            tr("Extraction complete. The source file is unchanged; edit and preview the text.")
-        )
+        self.w.status_label.clear()
         self.w.show_page("Studio")
 
         if self.w.clean_mode_combo.currentData() == "english":
             self.apply_cleaning()
 
-    def paste_text(self):
-        text, ok = QInputDialog.getMultiLineText(
-            self.w,
-            tr("Paste source text"),
-            tr("Kept on this device. Review the speech text before synthesis."),
-        )
-        if ok:
-            if len(text.encode("utf-8")) > 1024 * 1024:
+    def paste_clipboard(self):
+        if self.closing or self.w.page_stack.currentWidget() is not self.w.pages["Studio"]:
+            return
+        if self.ocr_request is not None:
+            self.w.cancel_ocr_button.setFocus()
+            return
+        kind, value = read_mime(QApplication.clipboard().mimeData())
+        if kind == "image":
+            self._import_image(snapshot=value)
+        elif kind == "invalid":
+            self._error(tr("Choose a valid clipboard image within 32 MiB and 24 megapixels."))
+        elif kind == "file":
+            self.w.status_label.setText(tr("To open a copied file, use Import file."))
+        elif kind == "empty":
+            self.w.status_label.setText(tr("Copy an image or plain text first."))
+        else:
+            edit = self.w.speech_edit
+            cursor = edit.textCursor()
+            # Qt represents selected paragraph breaks as U+2029, while toPlainText
+            # returns newlines. Count the actual replacement bytes, not Qt separators.
+            try:
+                size = (
+                    len(edit.toPlainText().encode("utf-8"))
+                    - len(cursor.selectedText().replace("\u2029", "\n").encode("utf-8"))
+                    + len(value.encode("utf-8"))
+                )
+            except UnicodeError:
+                self._error(tr("Clipboard text contains invalid Unicode. Nothing was pasted."))
+                return
+            if size > 1024 * 1024:
                 self._error(tr("Text exceeds the 1 MiB limit."))
                 return
-            self._imported(
-                {
-                    "text": text,
-                    "source_name": "Pasted text",
-                    "format": "text",
-                    "changes": [],
-                    "warnings": [],
-                },
-                self.revision,
-            )
+            if self.w.source_edit.toPlainText() or edit.toPlainText():
+                edit.insertPlainText(value)
+                edit.setFocus()
+            else:
+                self._imported(
+                    {
+                        "text": value,
+                        "source_name": tr("Pasted text"),
+                        "format": "text",
+                        "changes": [],
+                        "warnings": [],
+                    },
+                    self.revision,
+                )
 
     def prepare_preview(self):
         revision = self.revision
@@ -725,9 +1170,7 @@ class Controller(QObject):
         )
         self.w.approval_check.setChecked(False)
         self.w.approval_check.setEnabled(True)
-        self.w.status_label.setText(
-            tr("Local preview complete. No online request or synthesis has started.")
-        )
+        self.w.status_label.clear()
         self._gate()
 
     def cancel_preparation(self):
@@ -738,12 +1181,13 @@ class Controller(QObject):
         self._gate()
 
     def generate(self):
-        """The explicit button click approves only the visible snapshot for this job."""
+        """Capture the visible snapshot; online sending needs separate explicit consent."""
         if (
             self.closing
             or self.confirming
             or self.synthesis
             or self.pending_clean is not None
+            or self.ocr_request is not None
             or not self._ready_to_generate()
         ):
             return
@@ -813,6 +1257,34 @@ class Controller(QObject):
         if data.get("sha256") != snapshot["sha256"]:
             self._error(tr("Reviewed text identity does not match. Nothing was sent."))
             return
+        allowed = False
+        if snapshot["settings"]["engine"] == "edge-tts":
+            # A generic Generate label is not online consent. Reuse the existing,
+            # unchecked per-run dialog and revalidate after its nested event loop.
+            self.confirming = True
+            self._gate()
+            try:
+                allowed = confirm_transmission(
+                    self.w, snapshot["text"], snapshot["settings"], snapshot["sha256"]
+                )
+            finally:
+                self.confirming = False
+                self._gate()
+            if not allowed:
+                self.w.status_label.clear()
+                return
+            if (
+                self.closing
+                or self.synthesis
+                or snapshot["revision"] != self.revision
+                or snapshot["signature"] != self._signature()
+                or not self._ready_to_generate()
+                or self._reading_issue()
+            ):
+                self.w.status_label.setText(
+                    tr("The draft or settings changed. Click Generate again.")
+                )
+                return
         out_dir = self.w.output_dir_edit.text().strip()
         if not out_dir or not Path(out_dir).is_absolute():
             self._error(tr("Choose an absolute path for the output directory."))
@@ -824,13 +1296,17 @@ class Controller(QObject):
         self.preview_signature = snapshot["signature"]
         self.active_title = self.w.title_edit.text()
         self.active_task = None
+        self.generation_signature = snapshot["signature"]
+        if self.draft_before_preview is not None:
+            # Only adopt when submission succeeds through the usual consent gates.
+            self._adopt_clean_preview()
         self._start_synthesis(
             {
                 "command": "start",
                 "text": snapshot["text"],
                 "settings": snapshot["settings"],
                 "approved_sha256": snapshot["sha256"],
-                "allow_online": snapshot["settings"]["engine"] == "edge-tts",
+                "allow_online": allowed,
                 "english_only": self.w.clean_mode_combo.currentData() == "english",
                 "out_dir": out_dir,
                 "cache_dir": str(self.root / "chunk-cache"),
@@ -889,8 +1365,8 @@ class Controller(QObject):
             return
         self._progress(data)
         if data.get("status") == "completed" and data.get("export_path"):
-            self.w.status_label.setText(tr("Audio is ready."))
-            self._verify(data["export_path"], self.active_title)
+            self.w.status_label.clear()
+            self._verify(data["export_path"], self.active_title, self.generation_signature)
         else:
             self.w.status_label.setText(
                 tr(
@@ -957,6 +1433,7 @@ class Controller(QObject):
                 return
         if self.closing or self.synthesis:
             return
+        self.generation_signature = None  # Resumed history does not identify the Studio draft.
         self.active_task = path
         self.active_title = Path(path).name
         self._start_synthesis(
@@ -1081,25 +1558,28 @@ class Controller(QObject):
                 return
             self._verify(row.get("export_path") or row["path"], row.get("title", ""))
 
-    def _verify(self, path, title=""):
+    def _verify(self, path, title="", generation_signature=None):
         self.w.status_label.setText(
             tr("Decoding locally and checking the manifest, hashes and subtitles.")
         )
         self._request(
             {"command": "verify", "path": path, "runtime": self._runtime()},
-            lambda data: self._verified(data, title),
+            lambda data: self._verified(data, title, generation_signature),
             timeout=180_000,
         )
 
-    def _verified(self, data, title):
+    def _verified(self, data, title, generation_signature=None):
         if self.closing:
             return
         self.last_verified = data
+        if generation_signature is not None:
+            self.generated_outputs[generation_signature] = data["audio_path"]
+        self._gate()
         self.player.load(data, title)
         self.bilingual.load(data)
         self.w.listen_open_button.setEnabled(True)
         self.w.show_page("Listen")
-        self.w.status_label.setText(tr("Audio is ready."))
+        self.w.status_label.clear()
 
     def open_selected_folder(self):
         row = self._selected(self.w.library_table)
@@ -1194,7 +1674,7 @@ class Controller(QObject):
             self.refresh_localized_text(values["language"])
         self._settings_dirty()
         self.w.settings_save_status.setText(tr("Settings saved"))
-        self.w.status_label.setText(tr("Settings saved"))
+        self.w.status_label.clear()
         if any(
             previous.get(k) != values[k]
             for k in ("model_dir", "offline_python", "ffmpeg", "ffprobe")
@@ -1249,7 +1729,9 @@ class Controller(QObject):
         runtime = self._runtime()
         self._request(
             {"command": "engines", "runtime": runtime},
-            lambda data: self._engines(data) if self._runtime() == runtime else None,
+            lambda data: self._engines(data)
+            if self._runtime() == runtime and self.w.engine_combo.currentData() != "auto"
+            else None,
         )
 
     def _engines(self, data):
@@ -1299,30 +1781,26 @@ class Controller(QObject):
                 )
             )
         else:
-            self.w.status_label.setText(tr("Ready"))
-        # Capability discovery is not a synthesis health check.
-        for engine in data.get("engines", []):
-            if engine.get("engine_id") == self.w.engine_combo.currentData():
-                voices = engine.get("voices", [])
-                if voices and all(isinstance(v, str) for v in voices):
-                    current = self.w.voice_combo.currentText()
-                    with QSignalBlocker(self.w.voice_combo):
-                        self.w.voice_combo.clear()
-                        self.w.voice_combo.addItems(voices)
-                        self.w.voice_combo.setCurrentText(current)
-        self._gate()
+            self.w.status_label.clear()
+        previous = self.w.voice_combo.currentData()
+        self._refresh_voices()
+        if previous != self.w.voice_combo.currentData():
+            self._invalidate()
+        else:
+            self._gate()
 
     def shutdown(self):
         if self.closing:
             return
         self.closing = True
+        self._release_clipboard_image()
         self.pending_submission = None
         self.confirming = False
         self.poll_timer.stop()
         self.player.media.stop()
         self.w.status_label.setText(tr("Saving and pausing tasks owned by this window…"))
         for worker in tuple(self.workers):
-            if worker is self.synthesis:
+            if worker is self.synthesis or worker.request.get("command") == "image_ocr":
                 worker.interrupt()
             else:
                 worker.kill()
