@@ -110,11 +110,24 @@ Selected runtime artwork/tokens are in `src/lextide/desktop/assets/`; exact curr
 paths, hashes and rights status are listed in `ASSET_RELEASE_MANIFEST.md` above.
 Original AI/SVG research assets and full design HTML/PDF were not edited or vendored wholesale.
 
-## Optional image recognition on macOS (G10)
+## Optional image recognition on macOS (G10 / G10.2.3)
 
 Image import can run a separately installed Tesseract executable and local language data.
 The benchmark used Tesseract 5.5.3 and the official tessdata_fast eng and chi_sim files.
 Their upstream license texts are available from [Tesseract](https://github.com/tesseract-ocr/tesseract/blob/main/LICENSE)
-and [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast/blob/main/LICENSE).
+and [tessdata_fast](https://github.com/tesseract-ocr/tesseract/blob/main/LICENSE).
 Neither the executable nor its language models are included in this bundle.
-The Lextide Swift helper uses Apple's system Vision and ImageIO frameworks.
+
+On macOS, Lextide's Python Apple Vision worker (`src/lextide/desktop/vision_ocr_worker.py`)
+calls Apple's system Vision and ImageIO frameworks via PyObjC bindings (`sys_platform == 'darwin'`).
+No Swift compiler or custom Swift helper binary is bundled.
+
+| Package | Version | Scope | License / source |
+|---|---|---|---|
+| pyobjc-core | 13.1 | macOS desktop runtime | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-Cocoa | 13.1 | macOS desktop runtime | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-Quartz | 13.1 | macOS desktop runtime | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-CoreML | 13.1 | macOS desktop runtime (transitive via Vision) | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-Vision | 13.1 | macOS desktop runtime | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-CoreText | 13.1 | macOS dev/QA only (transitive via ApplicationServices) | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |
+| pyobjc-framework-ApplicationServices | 13.1 | macOS dev/QA only (`scripts/qa_frozen_ocr.py`) | MIT; [PyObjC](https://github.com/ronaldoussoren/pyobjc) |

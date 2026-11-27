@@ -18,6 +18,7 @@ desktop = [
     "PySide6-Addons==6.12.0",
     "pypdf==6.21.1",
     "markdown-it-py==4.2.0",
+    "pyobjc-framework-Vision==13.1; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
@@ -25,7 +26,11 @@ lextide = "lextide.cli:main"
 tts-studio = "lextide.cli:main"
 
 [dependency-groups]
-dev = ["pytest==8.4.2", "ruff==0.14.0"]
+dev = [
+    "pytest==8.4.2",
+    "ruff==0.14.0",
+    "pyobjc-framework-ApplicationServices==13.1; sys_platform == 'darwin'",
+]
 bundle = ["pyinstaller==6.22.3", "pyinstaller-hooks-contrib==2026.8"]
 
 [tool.hatch.build.targets.wheel]

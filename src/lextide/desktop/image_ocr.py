@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ..errors import StudioError
 from ..longform.document import MAX_DOCUMENT_BYTES
-from ..runtime import external_runtime_environment, is_frozen
+from ..runtime import external_runtime_environment, vision_ocr_command
 from .importing import DocumentImportError, _read_source
 
 ERRORS = {
@@ -79,11 +79,13 @@ def checked_metadata(value: dict) -> dict:
 
 def _tool(provider: str) -> str:
     if provider == "apple-vision":
-        candidates = (
-            [Path(sys.executable).parent.parent / "Resources/ocr/lextide-vision-ocr"]
-            if is_frozen()
-            else [os.environ.get("LEXTIDE_VISION_HELPER")]
-        )
+        configured = os.environ.get("LEXTIDE_VISION_HELPER")
+        if configured:
+            candidates = [configured]
+        elif sys.platform == "darwin":
+            return sys.executable
+        else:
+            candidates = []
     else:
         configured = os.environ.get("LEXTIDE_TESSERACT")
         candidates = (
@@ -106,14 +108,27 @@ def _tool(provider: str) -> str:
     raise _error("OCR_UNAVAILABLE")
 
 
+def _vision_command(*arguments: str) -> list[str]:
+    """Resolve Apple Vision OCR subprocess command.
+
+    Preserves LEXTIDE_VISION_HELPER overrides and _tool monkeypatches while
+    running the built-in Python Vision worker via sys.executable on macOS.
+    """
+    binary = _tool("apple-vision")
+    if binary == sys.executable and not os.environ.get("LEXTIDE_VISION_HELPER"):
+        return vision_ocr_command(*arguments)
+    return [binary, *arguments]
+
+
 async def _run(args: list[str], timeout: float, limit: int) -> tuple[int, str]:
+    use_external_env = not (args and args[0] == sys.executable)
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
-            env=external_runtime_environment(),
+            env=external_runtime_environment() if use_external_env else None,
         )
     except OSError:
         raise _error("OCR_UNAVAILABLE") from None
@@ -193,14 +208,19 @@ async def _tesseract(path: Path, language: str) -> tuple[str, list[str], None]:
 
 
 async def _vision(path: Path, language: str) -> tuple[str, list[str], float | None]:
-    binary = _tool("apple-vision")
+    lang_cmd = _vision_command("--languages")
     langs = _languages("apple-vision", language)
-    status, raw = await _run([binary, "--languages"], 3, 65536)
+    status, raw = await _run(lang_cmd, 3, 65536)
     try:
         inventory = json.loads(raw)
-        if status or not set(langs).issubset(inventory["supported_languages"]):
+        if status or inventory.get("ok") is False:
+            if inventory.get("error_code") == "PROVIDER_UNAVAILABLE":
+                raise _error("OCR_UNAVAILABLE")
             raise _error("OCR_LANGUAGE_UNAVAILABLE")
-        status, raw = await _run([binary, str(path), ",".join(langs)], 8, 4 * MAX_DOCUMENT_BYTES)
+        if not set(langs).issubset(inventory["supported_languages"]):
+            raise _error("OCR_LANGUAGE_UNAVAILABLE")
+        ocr_cmd = _vision_command(str(path), ",".join(langs))
+        status, raw = await _run(ocr_cmd, 8, 4 * MAX_DOCUMENT_BYTES)
         result = json.loads(raw)
         if status or result.get("ok") is not True:
             code = {
@@ -208,6 +228,8 @@ async def _vision(path: Path, language: str) -> tuple[str, list[str], float | No
                 "LANGUAGE_MISMATCH": "OCR_LANGUAGE_MISMATCH",
                 "UNSUPPORTED_LANGUAGE": "OCR_LANGUAGE_UNAVAILABLE",
                 "OUTPUT_LIMIT": "OCR_OUTPUT_LIMIT",
+                "PROVIDER_UNAVAILABLE": "OCR_UNAVAILABLE",
+                "INVALID_IMAGE": "OCR_INVALID_IMAGE",
             }
             raise _error(code.get(result.get("error_code"), "OCR_FAILED"))
         if result["effective_languages"] != langs or result["provider"] != "apple-vision":

@@ -148,8 +148,6 @@ def _excluded_reason(name: str) -> str | None:
         return None
     if any(suffix.lower() in EXCLUDED_SUFFIXES for suffix in path.suffixes):
         return "non_source_or_user_material"
-    if name in {"packaging/macos/VisionOCR.swift", "scripts/qa_frozen_ocr.swift"}:
-        return None
     if name in REVIEWED_DOCUMENT_IMAGES:
         return None
     if path.suffix.lower() in {".png", ".svg"} and path.parts[:4] != (

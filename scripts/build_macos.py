@@ -178,20 +178,9 @@ def main() -> None:
         "notarization": "NOTARIZATION_PENDING",
         "external_dependencies": ["ffmpeg", "ffprobe", "optional Kokoro runtime and models"],
     }
-    # The packaged helper uses only macOS frameworks. End users do not need Swift.
-    compiler = ["/usr/bin/xcrun", "swiftc"]
-    info["swift_compiler"] = subprocess.check_output([*compiler, "--version"], text=True).strip()
-    run(
-        *compiler,
-        "-O",
-        "-target",
-        "arm64-apple-macosx13.0",
-        "-module-cache-path",
-        str(destination / "swift-module-cache"),
-        "-o",
-        str(staging / "lextide-vision-ocr"),
-        str(ROOT / "packaging/macos/VisionOCR.swift"),
-    )
+    # Apple Vision OCR runs via the bundled Python worker (--vision-ocr) using PyObjC.
+    # No project-specific Swift compiler step or Swift helper binary is required.
+    info["vision_worker_mode"] = "python-pyobjc"
     info["external_dependencies"].append("optional Tesseract executable and local language data")
     info["components"] = prepare_licenses(staging)
     (staging / "build-info.json").write_text(json.dumps(info, indent=2) + "\n")
@@ -221,10 +210,12 @@ def main() -> None:
         )
     app = destination / "dist/Lextide.app"
     run("/usr/bin/codesign", "--verify", "--deep", "--strict", str(app))
-    helper = app / "Contents/Resources/ocr/lextide-vision-ocr"
-    probe = json.loads(subprocess.check_output([str(helper), "--languages"], timeout=8))
+    helper = app / "Contents/MacOS/Lextide"
+    probe = json.loads(
+        subprocess.check_output([str(helper), "--vision-ocr", "--languages"], timeout=8)
+    )
     if probe.get("provider") != "apple-vision" or probe.get("ok") is not True:
-        raise SystemExit("Bundled Vision helper did not return its language catalogue.")
+        raise SystemExit("Bundled Python Vision worker did not return its language catalogue.")
     info["vision_capabilities_on_build_host"] = probe
     inventory = file_inventory(app)
     encoded = (json.dumps(inventory, indent=2) + "\n").encode()

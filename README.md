@@ -6,11 +6,13 @@ Turn written content into natural speech, synchronized subtitles, and a focused 
 
 Lextide is a Python learning project for macOS: prepare a reading script, explicitly approve online speech or use an optional offline engine, and keep the resulting MP3 and sentence-level SRT on your own computer. The interface supports **English and 简体中文**.
 
+Lextide is developed with **Python as its sole project-authored programming language**. Native macOS functionality is accessed through Python bindings (PyObjC) and the desktop interface is built with PySide6. Third-party native frameworks, system APIs and declarative assets — JSON, TOML, Markdown, SVG, QSS — are of course not Python, and are not counted as project-authored code.
+
 **0.6.1 is the first public source release.** G1–G6 passed independent engineering validation and user acceptance; the two G6 findings in Edge quotation metadata and mixed English/Chinese preparation were retested and are closed (`G6_PASS` / `USER_ACCEPTED`).
 
 The latest public **release** is [v0.10.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.10.0); its tag and source archive are unchanged. This repository publishes **source only**.
 
-`main` now carries the **G10.2.2 development milestone** (`0.10.0` internals), which includes the refined native interface, the OCR original-image comparison, the dynamic idle/loaded player and the playback-rate label fix. Those changes are **in `main` only** — the `v0.10.0` release archive predates them.
+`main` now carries the **G10.2.3 Python-only milestone** (`0.10.0` internals): the refined native interface, the OCR original-image comparison, the dynamic idle/loaded player, the playback-rate label fix, and the migration of the project-authored Vision OCR helper and macOS QA automation from Swift/AppleScript to Python. Those changes are **in `main` only** — the `v0.10.0` release archive predates them.
 
 The source code is released under the [MIT License](LICENSE). Brand artwork is reserved and governed by [TRADEMARKS.md](TRADEMARKS.md); the exact asset scope is in [ASSETS_LICENSE.md](ASSETS_LICENSE.md). This release is **source only** — it does not include, and does not authorize, a public `.app` distribution.
 
@@ -41,6 +43,29 @@ Earlier released interfaces are kept in [docs/images](docs/images) for compariso
 - Long-document chunks, validated raw PCM cache, pause/cancel/resume, atomic local exports and historical manifest compatibility.
 - Local MP3 playback with sentence subtitles, adjustable transcript size (12–40 px), light/dark themes.
 - **English Only** (default) or **English + Chinese** subtitle display; import an existing Chinese SRT/TXT, review every mapped cue before saving, and edit Chinese text per cue. Translations stay in separate local JSON; the English SRT and audio remain unchanged.
+
+### Python-only implementation notes
+
+- Apple Vision OCR runs in a Python worker (`src/lextide/desktop/vision_ocr_worker.py`) through PyObjC, in a separate
+  subprocess with the same JSON contract, timeouts and size limits as before.
+- The frozen-app OCR QA automation (`scripts/qa_frozen_ocr.py`) is Python + PySide6 + Accessibility; it no longer uses
+  AppleScript or `osascript`.
+- Building the macOS bundle no longer compiles any project-specific Swift helper.
+- **Tesseract remains the default local OCR engine.** Apple Vision is an optional engine.
+
+**First-time PyObjC initialisation.** In a brand-new Python virtual environment the very first import of the native
+Vision bindings can take several seconds (measured 9–14 s on the development machine) because macOS scans the new
+native libraries. Lextide's language query budget is 3 s and the recognition budget is 8 s, so run a one-off warm-up
+before using Apple Vision from source:
+
+```bash
+uv sync --locked --extra desktop --group dev --group bundle --python 3.14
+uv run python -m lextide.desktop.vision_ocr_worker --languages
+```
+
+The second call should drop to roughly 150–200 ms. The frozen `.app` is not affected by this and answers in well under
+half a second. First-time Apple Vision recognition can still be affected by ordinary macOS cold-start behaviour; timings
+are not guaranteed to be identical on every machine.
 
 **Not implemented:** screen region capture, scanned-PDF OCR, automatic subtitle translation, word-level alignment, cloud accounts, auto-updates and Windows packaging. Local PNG and JPEG recognition is available in Studio. Windows development is a separate future project.
 

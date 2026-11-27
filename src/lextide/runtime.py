@@ -23,6 +23,11 @@ def desktop_worker_command(request_path: Path) -> list[str]:
     return [sys.executable, *arguments, str(request_path)]
 
 
+def vision_ocr_command(*arguments: str) -> list[str]:
+    entry = ["--vision-ocr"] if is_frozen() else ["-m", "lextide.desktop.vision_ocr_worker"]
+    return [sys.executable, *entry, *arguments]
+
+
 def external_runtime_environment() -> dict[str, str]:
     """Copy the environment without handing bundle library paths to external Python.
 

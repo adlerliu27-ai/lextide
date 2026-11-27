@@ -42,6 +42,17 @@ def test_worker_dispatch_precedes_gui(monkeypatch):
     assert calls == [["/request"]]
 
 
+def test_vision_ocr_dispatch_precedes_gui(monkeypatch):
+    from lextide import cli
+    from lextide.desktop import vision_ocr_worker
+
+    calls = []
+    monkeypatch.setattr(cli, "main", lambda _: pytest.fail("GUI initialized for vision OCR"))
+    monkeypatch.setattr(vision_ocr_worker, "main", lambda args: calls.append(args) or 0)
+    assert load_file("packaging/macos/launcher.py").main(["--vision-ocr", "--languages"]) == 0
+    assert calls == [["--languages"]]
+
+
 def test_supervisor_dispatch_precedes_gui(monkeypatch):
     from lextide import cli
     from lextide.longform import process

@@ -16,6 +16,10 @@ def main(argv: list[str] | None = None) -> int:
         from lextide.desktop.worker import main as worker_main
 
         return worker_main(args[1:])
+    if args[:1] == ["--vision-ocr"]:
+        from lextide.desktop.vision_ocr_worker import main as vision_ocr_main
+
+        return vision_ocr_main(args[1:])
     from lextide.cli import main as cli_main
 
     if args[:1] == ["--cli"]:
