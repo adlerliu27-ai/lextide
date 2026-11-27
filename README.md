@@ -16,7 +16,7 @@ The latest public **release** is [v0.10.0](https://github.com/adlerliu27-ai/lext
 
 The source code is released under the [MIT License](LICENSE). Brand artwork is reserved and governed by [TRADEMARKS.md](TRADEMARKS.md); the exact asset scope is in [ASSETS_LICENSE.md](ASSETS_LICENSE.md). This release is **source only** — it does not include, and does not authorize, a public `.app` distribution.
 
-### Current interface (`main`, G10.2.2 milestone)
+### Current interface (`main`, G10.2.3 milestone)
 
 > **Source in `main`, no new binary release.** These screenshots show the interface that `main` builds.
 > There is still **no signed or notarized `.app`** — the repository ships source only, and the
@@ -71,7 +71,7 @@ are not guaranteed to be identical on every machine.
 
 ## Run from source on macOS
 
-The native development bundle is built for **Apple Silicon (arm64)**; current acceptance evidence is from macOS 27.0.1. The bundle declares macOS 13 as its minimum, but older macOS and Intel are not yet verified.
+The native development bundle is built for **Apple Silicon (arm64)**; current acceptance evidence is from macOS 27.2.1. The bundle declares macOS 13 as its minimum, but older macOS and Intel are not yet verified.
 
 Install Python **3.12–3.14**, [uv](https://docs.astral.sh/uv/getting-started/installation/) and FFmpeg/ffprobe using your preferred trusted source. Python 3.13 is a useful choice if you also plan to install Kokoro's separate runtime. No administrator permissions are requested by Lextide.
 
