@@ -1,0 +1,16 @@
+{
+  "Local image OCR": "本地图片文字识别",
+  "Original OCR image": "识别原图",
+  "Fit": "适应窗口",
+  "Show at original pixel scale": "按原始像素比例显示",
+  "Fit image in pane": "将图片缩放至预览区",
+  "Zoom in": "放大",
+  "Zoom out": "缩小",
+  "Hide image": "隐藏原图",
+  "Show image": "显示原图",
+  "Local image preview unavailable. You can still review the text.": "无法预览本地原图，仍可核对识别文字。",
+  "Unknown language": "未知语言",
+  "{language} · {provider}": "{language} · {provider}",
+  "Check after reviewing the text.": "请在核对文字后勾选。",
+  "Text edited. Check the box again when finished.": "文字已修改，请在核对后重新勾选。"
+}

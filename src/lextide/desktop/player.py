@@ -79,6 +79,7 @@ class LocalPlayer(QObject):
         self.starts = [c["start_ms"] for c in self.cues]
         self.active = None
         self.loaded_path = Path(verified["audio_path"])
+        self._duration(0)
         self.window.set_transcript(self.cues)
         self.window.listen_title_label.setText(title or self.loaded_path.parent.name)
         self.window.player_title_label.setText(title or self.loaded_path.parent.name)
@@ -120,12 +121,11 @@ class LocalPlayer(QObject):
         if index != self.active:
             self.active = index
             w.set_active_cue(index if index is not None else -1)
-            if index is not None and w.follow_check.isChecked():
-                w.transcript_list.scrollToItem(w.transcript_list.item(index))
 
     def _duration(self, duration):
-        self.window.seek_slider.setRange(0, duration)
-        self.window.duration_label.setText(clock_text(duration))
+        with QSignalBlocker(self.window.seek_slider):
+            self.window.seek_slider.setRange(0, max(0, duration))
+        self.window.duration_label.setText(clock_text(duration) if duration > 0 else "--:--")
 
     def _state(self, state):
         playing = state == QMediaPlayer.PlaybackState.PlayingState
@@ -135,11 +135,25 @@ class LocalPlayer(QObject):
         )
 
     def _media_status(self, status):
+        if status == QMediaPlayer.MediaStatus.NoMedia and self.media.source().isEmpty():
+            self._enable(False)
+            self.window.set_player_loaded(False)
+            self.loaded_path = None
+            self.cues = []
+            self.starts = []
+            self.active = None
+            self.window.set_transcript([])
+            self.window.player_title_label.setText(tr("No audio loaded"))
+            self.window.player_detail_label.setText(tr("Open a session in Library"))
+            self._duration(0)
+            self._position(0)
+            return
         if status in (
             QMediaPlayer.MediaStatus.LoadedMedia,
             QMediaPlayer.MediaStatus.BufferedMedia,
             QMediaPlayer.MediaStatus.EndOfMedia,
         ):
+            self.window.set_player_loaded(True)
             self._enable(True)
             self.window.player_detail_label.setText(tr("Local MP3 · Sentence subtitles"))
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
@@ -147,6 +161,7 @@ class LocalPlayer(QObject):
 
     def _error(self, *_):
         self._enable(False)
+        self.window.set_player_loaded(False)
         self.window.player_detail_label.setText(tr("Playback failed"))
         messages = {
             QMediaPlayer.Error.ResourceError: (

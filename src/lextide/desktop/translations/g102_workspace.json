@@ -1,0 +1,14 @@
+{
+  "Created": "创建时间",
+  "Load script in Studio": "在工作室载入朗读稿",
+  "Reset changes": "撤销更改",
+  "All changes saved": "已保存所有更改",
+  "Kokoro · Not checked": "Kokoro · 尚未检查",
+  "Kokoro · Ready": "Kokoro · 已就绪",
+  "Kokoro · Not configured": "Kokoro · 未配置",
+  "{count} local sessions": "{count} 个本地会话",
+  "Replace the current Studio draft?": "替换工作室中的当前草稿？",
+  "Open Studio": "打开工作室",
+  "Saved reading text does not match its manifest.": "已保存的朗读稿与任务清单不符。",
+  "Folder · {name}": "文件夹 · {name}"
+}

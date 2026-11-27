@@ -2,7 +2,10 @@
 
 import asyncio
 import hashlib
+import json
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 import test_g8_generation as g8
@@ -13,6 +16,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QPlainTextEdit
 from lextide.desktop import controller, ocr_ui, service
 from lextide.desktop.i18n import tr
 from lextide.errors import StudioError
+from lextide.longform import tasks
 
 desktop = g8.desktop
 
@@ -264,6 +268,22 @@ def test_confirmed_partial_clean_edit_and_send_use_final_sha(desktop, monkeypatc
         original == data["text"] and record["approved_tts_sha256"] == submitted["approved_sha256"]
     )
 
+    # Exercise the real task/review writers up to the synthesis boundary.
+    # This needs neither FFmpeg nor an online connection.
+    monkeypatch.setattr(tasks, "resolve_media_tools", lambda *_: ("ffmpeg", "ffprobe"))
+    monkeypatch.setattr(tasks, "_decoder_version", lambda *_: "offline-test")
+    monkeypatch.setattr(service, "_run", AsyncMock(return_value={}))
+    events = []
+    out_dir = Path(submitted["out_dir"])
+    assert out_dir.is_relative_to(c.root) and not list(out_dir.glob("task-*"))
+    asyncio.run(service.start(submitted, events.append))
+    task = Path(events[0]["task_path"])
+    persisted = json.loads((task / "document-review.json").read_text())
+    assert persisted == record
+    assert (task / "source-extracted.txt").read_text() == data["text"]
+    assert (task / "tts.txt").read_text() == submitted["text"]
+    assert persisted["source"]["ocr_review"]["corrected_text"] == corrected
+
 
 @pytest.mark.parametrize(
     "engine,voice", [("edge-tts", "en-US-GuyNeural"), ("kokoro", "am_michael")]
@@ -324,7 +344,7 @@ def test_clipboard_partial_retry_retains_captured_image_and_new_token(desktop, m
     assert c.ocr_request is None
 
 
-@pytest.mark.parametrize("code", ["OCR_TIMEOUT", "OCR_FAILED"])
+@pytest.mark.parametrize("code", ["OCR_TIMEOUT", "OCR_FAILED", "OCR_EMPTY"])
 def test_local_recognition_error_does_not_offer_partial_review(desktop, monkeypatch, code):
     from lextide.desktop.image_ocr import ERRORS
 
@@ -343,5 +363,6 @@ def test_local_recognition_error_does_not_offer_partial_review(desktop, monkeypa
     _, callback, kw = requests.pop()
     kw["on_error"](f"{code}: {ERRORS[code]}")
     callback(partial())  # Even a late nonempty result cannot recover a failed attempt.
-    assert errors and c.ocr_request is None and w.ocr_progress.isHidden()
+    assert errors == [(tr("Operation not completed"), f"{code}: {tr(ERRORS[code])}")]
+    assert c.ocr_request is None and w.ocr_progress.isHidden()
     assert w.speech_edit.toPlainText() == before and not starts

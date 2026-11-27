@@ -6,10 +6,11 @@ from collections.abc import Sequence
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QCloseEvent, QFont, QIcon, QKeySequence
+from PySide6.QtGui import QCloseEvent, QFont, QFontDatabase, QIcon, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -44,7 +45,8 @@ from .localized import (
     QTabWidget,
     QToolButton,
 )
-from .theme import ASSETS, apply_theme, brand_symbol, icon
+from .presentation.view_overview import OverviewView
+from .theme import ASSETS, apply_theme, brand_symbol, icon, resolved_theme, status_dot
 
 
 def label(text: str, role: str = "", *, wrap: bool = False) -> QLabel:
@@ -54,6 +56,20 @@ def label(text: str, role: str = "", *, wrap: bool = False) -> QLabel:
         widget.setProperty("role", role)
     widget.setWordWrap(wrap)
     return widget
+
+
+class ElidedPlayerLabel(QLabel):
+    """Keep the full localized label accessible while painting one fitted line."""
+
+    def paintEvent(self, event):
+        if self.fontMetrics().horizontalAdvance(self.text()) <= self.contentsRect().width():
+            super().paintEvent(event)
+            return
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        rect = self.contentsRect()
+        text = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, rect.width())
+        painter.drawText(rect, self.alignment(), text)
 
 
 class OptionalStatusLabel(QLabel):
@@ -113,6 +129,9 @@ def disclosure(text: str, content: QWidget) -> QToolButton:
 def table(headers: list[str]) -> QTableWidget:
     widget = QTableWidget(0, len(headers))
     widget.setHorizontalHeaderLabels([tr(header) for header in headers])
+    widget.horizontalHeader().setDefaultAlignment(
+        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+    )
     widget.verticalHeader().hide()
     widget.verticalHeader().setDefaultSectionSize(51)
     widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -169,7 +188,9 @@ class MainWindow(QMainWindow):
             self.pages[name] = page
             self.page_stack.addWidget(page)
         content_layout.addWidget(self.page_stack, 1)
-        content_layout.addWidget(self._player())
+        self.player_bar = self._player()
+        content_layout.addWidget(self.player_bar)
+        self.set_player_loaded(False)
         self.status_label = OptionalStatusLabel()
         self.status_label.setProperty("role", "micro")
         self.status_label.setTextFormat(Qt.TextFormat.PlainText)
@@ -177,6 +198,32 @@ class MainWindow(QMainWindow):
         self.status_label.setContentsMargins(16, 3, 16, 3)
         content_layout.addWidget(self.status_label)
         self._shortcuts()
+        for sequence in (
+            (
+                self.clean_mode_combo,
+                self.clean_button,
+                self.discard_preview_button,
+                self.review_toggle,
+                self.paste_source_button,
+                self.source_edit,
+                self.speech_edit,
+                self.engine_combo,
+                self.gender_combo,
+                self.voice_combo,
+                self.rate_spin,
+                self.generate_button,
+            ),
+            (
+                self.focus_check,
+                self.follow_check,
+                self.subtitle_mode_combo,
+                self.font_combo,
+                self.transcript_list,
+                self.session_details_toggle,
+            ),
+        ):
+            for previous, following in zip(sequence, sequence[1:]):
+                QWidget.setTabOrder(previous, following)
         self.library_search.textChanged.connect(self._filter_history)
         self.library_table.itemSelectionChanged.connect(self._library_selection)
         self.theme_combo.currentIndexChanged.connect(
@@ -205,7 +252,7 @@ class MainWindow(QMainWindow):
     def _sidebar(self) -> QFrame:
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(222)
+        sidebar.setFixedWidth(216)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(15, 26, 15, 19)
         layout.setSpacing(6)
@@ -227,6 +274,8 @@ class MainWindow(QMainWindow):
         layout.addSpacing(29)
         layout.addWidget(label("WORKSPACE", "micro"))
         self.nav_buttons = {}
+        self.nav_group = QButtonGroup(sidebar)
+        self.nav_group.setExclusive(True)
         icons = ("home", "file-text", "library", "headphones", "list-check", "settings")
         for name, resource in zip(self.PAGES, icons):
             if name == "Settings":
@@ -236,6 +285,7 @@ class MainWindow(QMainWindow):
             control.setObjectName("NavButton")
             control.setCheckable(True)
             control.clicked.connect(lambda checked=False, page=name: self.show_page(page))
+            self.nav_group.addButton(control)
             self.nav_buttons[name] = control
             layout.addWidget(control)
         layout.addStretch()
@@ -244,16 +294,17 @@ class MainWindow(QMainWindow):
     def _toolbar(self) -> QFrame:
         frame = QFrame()
         frame.setObjectName("Toolbar")
-        frame.setFixedHeight(56)
+        frame.setFixedHeight(48)
         layout = QHBoxLayout(frame)
-        layout.setContentsMargins(26, 7, 26, 7)
+        layout.setContentsMargins(22, 4, 22, 4)
         layout.setSpacing(10)
         layout.addWidget(label("Workspace   /", "muted"))
         self.breadcrumb_label = label("Overview")
         layout.addWidget(self.breadcrumb_label)
         layout.addStretch()
         self.import_button = self._add_icon(button("Import file"), "upload")
-        self.new_project_button = self._add_icon(button("New session", primary=True), "plus")
+        self.import_button.setToolTip(tr("Import a document or image (⌘O)."))
+        self.new_project_button = self._add_icon(button("New session"), "plus")
         layout.addWidget(self.import_button)
         layout.addWidget(self.new_project_button)
         return frame
@@ -270,9 +321,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(container)
         layout.setContentsMargins(26, 24, 26, 20)
         layout.setSpacing(16)
-        layout.addWidget(label(title, "title"))
-        hint = label(subtitle, "muted", wrap=True)
-        layout.addWidget(hint)
+        if title:
+            layout.addWidget(label(title, "title"))
+        if subtitle:
+            layout.addWidget(label(subtitle, "muted", wrap=True))
         if scroll:
             scroller = QScrollArea()
             scroller.setWidgetResizable(True)
@@ -284,93 +336,48 @@ class MainWindow(QMainWindow):
         return page, layout
 
     def _overview_page(self) -> QWidget:
-        page, layout = self._page(
-            "Your listening workspace",
-            "Turn written content into natural speech, synchronized subtitles, "
-            "and focused listening.",
-        )
-        hero, hero_layout = box("Hero", 25)
-        hero_row = QHBoxLayout()
-        copy = QVBoxLayout()
-        copy.setSpacing(10)
-        copy.addWidget(label("WELCOME TO LEXTIDE", "eyebrow"))
-        copy.addWidget(label("Make every word\nworth listening to.", "title"))
-        copy.addWidget(
-            label("A quiet space to turn your reading into natural audio.", "muted", wrap=True)
-        )
-        self.overview_new_button = self._add_icon(button("Create a session", primary=True), "plus")
-        self.overview_library_button = button("Open library")
+        view = OverviewView(dark=resolved_theme(self._theme_preference) == "dark", parent=self)
+        self.overview_view = view
+        self.overview_new_button = view.overview_new_button
+        self.overview_library_button = view.overview_library_button
+        self.overview_import_button = view.overview_import_button
+        self.view_library_button = view.view_library_button
+        self.overview_summary_label = view.overview_summary_label
+        self.recent_table = view.recent_table
+        self.recent_empty_label = view.recent_empty_label
         self.overview_library_button.clicked.connect(lambda: self.show_page("Library"))
-        actions = row(self.overview_new_button, self.overview_library_button)
-        actions.addStretch()
-        copy.addLayout(actions)
-        hero_row.addLayout(copy, 1)
-        art = QLabel()
-        art.setObjectName("OverviewBrand")
-        art.setPixmap(brand_symbol(116))
-        art.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        art.setFixedSize(142, 142)
-        hero_row.addWidget(art)
-        hero_layout.addLayout(hero_row)
-        layout.addWidget(hero)
-        next_row = QHBoxLayout()
-        next_row.setSpacing(14)
-        start, start_layout = box()
-        start_layout.addWidget(label("START WITH YOUR WORDS", "eyebrow"))
-        start_layout.addWidget(label("Import a document", "heading"))
-        start_layout.addWidget(
-            label(
-                "TXT, Markdown, DOCX, text-based PDF or a PNG/JPEG image.\n"
-                "Text is extracted locally for your review.",
-                "muted",
-                wrap=True,
-            )
-        )
-        self.overview_import_button = self._add_icon(button("Choose a file"), "upload")
-        start_layout.addWidget(self.overview_import_button, alignment=Qt.AlignmentFlag.AlignLeft)
-        next_row.addWidget(start)
-        summary, summary_layout = box()
-        summary_layout.addWidget(label("ON THIS DEVICE", "eyebrow"))
-        summary_layout.addWidget(label("Your local sessions", "heading"))
-        self.overview_summary_label = label(
-            "No sessions loaded. Create a session or open an existing output folder in Library.",
-            "muted",
-            wrap=True,
-        )
-        summary_layout.addWidget(self.overview_summary_label)
-        summary_layout.addStretch()
-        next_row.addWidget(summary)
-        layout.addLayout(next_row)
-        recent_row = QHBoxLayout()
-        recent_row.addWidget(label("Recent sessions", "heading"))
-        recent_row.addStretch()
-        view_library = button("View library  →", quiet=True)
-        view_library.clicked.connect(lambda: self.show_page("Library"))
-        recent_row.addWidget(view_library)
-        layout.addLayout(recent_row)
-        self.recent_table = table(["Session", "Status", "Engine"])
-        self.recent_table.setMaximumHeight(207)
-        layout.addWidget(self.recent_table)
-        self.recent_empty_label = label(
-            "Your first session will appear here after it has been saved.", "muted"
-        )
-        layout.addWidget(self.recent_empty_label)
-        layout.addStretch()
-        return page
+        self.view_library_button.clicked.connect(lambda: self.show_page("Library"))
+        return view
 
     def _studio_page(self) -> QWidget:
-        page, layout = self._page(
-            "Prepare your text",
-            "Keep the source. Review what is spoken and what appears in subtitles.",
+        page = QWidget()
+        page.setObjectName("Page")
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        scroller = QScrollArea()
+        scroller.setFrameShape(QFrame.Shape.NoFrame)
+        scroller.setWidgetResizable(True)
+        container = QWidget()
+        container.setObjectName("Page")
+        layout = QVBoxLayout(container)
+        layout.setSpacing(8)
+        layout.setContentsMargins(24, 12, 24, 12)
+        scroller.setWidget(container)
+        outer.addWidget(scroller, 1)
+        self.studio_header = QHBoxLayout()
+        self.studio_header.addWidget(label("Studio", "pageHeading"))
+        self.studio_intro = label(
+            "Import or paste study material to prepare your reading text.", "muted"
         )
-        layout.setSpacing(9)
-        layout.setContentsMargins(26, 20, 26, 16)
+        self.studio_header.addWidget(self.studio_intro)
+        self.studio_header.addStretch()
+        layout.addLayout(self.studio_header)
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText(tr("Session title (optional)"))
         self.title_edit.setAccessibleName(tr("Session title"))
-        self.import_studio_button = self._add_icon(button("Import file"), "upload")
-        self.paste_source_button = button("Paste")
-        self.paste_source_button.setToolTip(tr("Paste a clipboard image or text (⌘V)."))
+        self.paste_source_button = self._add_icon(button("Paste"), "clipboard")
+        self.paste_source_button.setToolTip(tr("Paste text or a screenshot (⌘V)."))
         self.encoding_combo = QComboBox()
         self.encoding_combo.addItem(tr("Auto encoding"), None)
         for encoding in (
@@ -389,16 +396,9 @@ class MainWindow(QMainWindow):
         self.encoding_combo.setToolTip(
             tr("TXT / Markdown encoding. Auto never silently discards undecodable characters.")
         )
-        layout.addLayout(
-            row(
-                self.title_edit,
-                self.encoding_combo,
-                self.import_studio_button,
-                self.paste_source_button,
-                stretch=0,
-            )
-        )
         self.ocr_progress = QWidget()
+        self.ocr_progress.setObjectName("OcrProgress")
+        self.ocr_progress.setFixedHeight(36)
         progress_layout = QHBoxLayout(self.ocr_progress)
         progress_layout.setContentsMargins(0, 0, 0, 0)
         progress_layout.addWidget(label("Recognizing image text locally…", "muted"))
@@ -414,13 +414,13 @@ class MainWindow(QMainWindow):
             "No source yet · Import a file or paste your original text.", "muted", wrap=True
         )
         self.source_path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.source_path_label)
         self.clean_mode_combo = QComboBox()
         self.clean_mode_combo.addItem(tr("Keep Original"), "original")
         self.clean_mode_combo.addItem(tr("English Only"), "english")
         self.clean_mode_combo.setAccessibleName(tr("Text preparation mode"))
         self.clean_button = button("Apply to reading text")
-        self.discard_preview_button = button("Discard preview", quiet=True)
+        self.discard_preview_button = button("Discard", quiet=True)
+        self.discard_preview_button.setToolTip(tr("Discard preview"))
         self.discard_preview_button.hide()
         self.clean_mode_combo.setToolTip(
             tr(
@@ -428,42 +428,72 @@ class MainWindow(QMainWindow):
                 "Review retained uncertain passages before generating."
             )
         )
-        preparation = QGridLayout()
-        preparation.setHorizontalSpacing(10)
-        preparation.setVerticalSpacing(5)
-        preparation.addWidget(label("Text Processing", "muted"), 0, 0)
-        preparation.addWidget(self.clean_mode_combo, 1, 0)
-        preparation.addWidget(self.clean_button, 1, 1)
-        preparation.addWidget(self.discard_preview_button, 1, 2)
-        preparation.setColumnStretch(3, 1)
-        layout.addLayout(preparation)
-        self.clean_summary_label = label(
-            "Removes clear Chinese translations and formatting locally. "
-            "Uncertain passages are kept for review.",
-            "micro",
-            wrap=True,
-        )
-        layout.addWidget(self.clean_summary_label)
+        self.review_content = QWidget()
+        review_body = QVBoxLayout(self.review_content)
+        review_body.setContentsMargins(0, 0, 0, 0)
+        self.clean_summary_label = label("", "muted", wrap=True)
+        review_body.addWidget(self.clean_summary_label)
+        self.changes_edit = QPlainTextEdit()
+        self.changes_edit.setObjectName("ChangesText")
+        self.changes_edit.setReadOnly(True)
+        self.changes_edit.setPlaceholderText(tr("No changes to review yet."))
+        self.changes_edit.setAccessibleName(tr("Text change record"))
+        self.changes_edit.setFixedHeight(100)
+        review_body.addWidget(self.changes_edit)
+        self.undo_button = button("Undo", quiet=True)
+        self.undo_button.setToolTip(tr("Undo the last speech-text edit"))
+        self.reset_button = button("Reset", quiet=True)
+        self.reset_button.setToolTip(tr("Reset speech text to the original source"))
+        self.review_toggle = disclosure("Review changes", self.review_content)
+        preparation = QFrame()
+        preparation.setObjectName("StudioPreparation")
+        actions = QHBoxLayout(preparation)
+        actions.setContentsMargins(6, 0, 6, 0)
+        actions.setSpacing(4)
+        actions.addWidget(self.clean_mode_combo)
+        actions.addWidget(self.clean_button)
+        actions.addWidget(self.discard_preview_button)
+        actions.addStretch()
+        actions.addWidget(self.undo_button)
+        actions.addWidget(self.reset_button)
+        actions.addWidget(self.review_toggle)
+        layout.addWidget(preparation)
+        layout.addWidget(self.review_content)
         self.studio_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.studio_splitter.setChildrenCollapsible(False)
         original, original_layout = box("TextPanel", 12)
         original_layout.addLayout(
-            row(label("Original text", "heading"), label("Read-only", "micro"), stretch=0)
+            row(label("Original text", "heading"), self.paste_source_button, stretch=0)
         )
         self.source_edit = QPlainTextEdit()
         self.source_edit.setObjectName("OriginalText")
         self.source_edit.setReadOnly(True)
         self.source_edit.setPlaceholderText(
-            tr("Your extracted or pasted source stays here, unchanged.")
+            tr("Paste text or a screenshot (⌘V), or import a file (⌘O).")
         )
-        self.source_edit.setMinimumHeight(180)
+        self.source_edit.setMinimumHeight(110)
         self.source_edit.setAccessibleName(tr("Original source text, read only"))
         original_layout.addWidget(self.source_edit)
         self.studio_splitter.addWidget(original)
         prepared, prepared_layout = box("TextPanel", 12)
         self.reading_heading = label("Reading text", "heading")
-        prepared_layout.addWidget(self.reading_heading)
         self.text_tabs = QTabWidget()
+        self.text_tabs.setObjectName("StudioTextTabs")
+        # Cocoa allows tabs to shrink to "Speech…" even when the adjacent
+        # source pane has space. Let the splitter account for both full titles.
+        self.text_tabs.setElideMode(Qt.TextElideMode.ElideNone)
+        self.text_tabs.setUsesScrollButtons(False)
+        self.preview_badge = label("Preview — not yet applied", "micro")
+        self.preview_badge.setObjectName("PreviewBadge")
+        self.preview_badge.setToolTip(tr("Preview — not yet applied"))
+        self.preview_badge.hide()
+        reading_header = QWidget()
+        heading_layout = QHBoxLayout(reading_header)
+        heading_layout.setContentsMargins(0, 0, 6, 0)
+        heading_layout.setSpacing(4)
+        heading_layout.addWidget(self.reading_heading)
+        heading_layout.addWidget(self.preview_badge)
+        self.text_tabs.setCornerWidget(reading_header, Qt.Corner.TopLeftCorner)
         self.speech_edit = QPlainTextEdit()
         self.speech_edit.setPlaceholderText(
             tr("Import or paste text, then edit the speech draft here.")
@@ -477,53 +507,32 @@ class MainWindow(QMainWindow):
         self.subtitle_edit.setAccessibleName(tr("Subtitle text, read only"))
         self.text_tabs.addTab(self.speech_edit, tr("Speech text"))
         self.text_tabs.addTab(self.subtitle_edit, tr("Subtitles"))
-        prepared_layout.addWidget(self.text_tabs)
+        prepared_layout.addWidget(self.text_tabs, 1)
         self.character_count_label = label(tr("{count:,} characters", count=0), "micro", wrap=True)
         prepared_layout.addWidget(self.character_count_label)
         self.studio_splitter.addWidget(prepared)
         self.studio_splitter.setStretchFactor(0, 2)
         self.studio_splitter.setStretchFactor(1, 3)
         self.studio_splitter.setSizes([300, 450])
-        self.studio_splitter.setMinimumHeight(300)
+        self.studio_splitter.setMinimumHeight(190)
         layout.addWidget(self.studio_splitter, 1)
-        review, review_layout = box("Review", 12)
-        self.review_content = QWidget()
-        review_body = QVBoxLayout(self.review_content)
-        review_body.setContentsMargins(0, 0, 0, 0)
-        self.changes_edit = QPlainTextEdit()
-        self.changes_edit.setObjectName("ChangesText")
-        self.changes_edit.setReadOnly(True)
-        self.changes_edit.setPlaceholderText(tr("No changes to review yet."))
-        self.changes_edit.setAccessibleName(tr("Text change record"))
-        self.changes_edit.setMinimumHeight(120)
-        self.changes_edit.setMaximumHeight(180)
-        review_body.addWidget(self.changes_edit)
-        self.undo_button = button("Undo")
-        self.undo_button.setToolTip(tr("Undo the last speech-text edit"))
-        self.reset_button = button("Reset")
-        self.reset_button.setToolTip(tr("Reset speech text to the original source"))
-        self.review_toggle = disclosure("Review changes", self.review_content)
-        review_header = row(self.review_toggle)
-        review_header.addStretch()
-        review_header.addWidget(self.undo_button)
-        review_header.addWidget(self.reset_button)
-        review_layout.addLayout(review_header)
-        review_layout.addWidget(self.review_content)
-        layout.addWidget(review)
-        voice_card, voice_layout = box(margins=14)
-        fields = QGridLayout()
-        fields.setHorizontalSpacing(14)
-        fields.setVerticalSpacing(6)
+
+        self.studio_options = QFrame()
+        self.studio_options.setObjectName("StudioOptions")
+        options = QGridLayout(self.studio_options)
+        options.setContentsMargins(26, 6, 26, 8)
+        options.setHorizontalSpacing(6)
+        options.setVerticalSpacing(4)
         self.engine_combo = QComboBox()
-        self.engine_combo.addItem(tr("Online · Edge TTS"), "edge-tts")
-        self.engine_combo.addItem(tr("Local / Offline · Kokoro"), "kokoro")
+        self.engine_combo.addItem(tr("Edge online"), "edge-tts")
+        self.engine_combo.addItem(tr("Kokoro offline"), "kokoro")
         self.engine_combo.addItem(tr("Auto"), "auto")
         self.gender_combo = QComboBox()
-        self.gender_combo.addItem(tr("American male"), "male")
-        self.gender_combo.addItem(tr("American female"), "female")
+        self.gender_combo.addItem(tr("US male"), "male")
+        self.gender_combo.addItem(tr("US female"), "female")
         self.voice_combo = QComboBox()
-        self.voice_combo.setMinimumContentsLength(12)
         self.rate_spin = QSpinBox()
+        self.rate_spin.setFixedWidth(82)
         self.rate_spin.setRange(-50, 100)
         self.rate_spin.setValue(-4)
         self.rate_spin.setSuffix(" %")
@@ -531,35 +540,19 @@ class MainWindow(QMainWindow):
         self.pause_spin.setRange(0, 2000)
         self.pause_spin.setValue(0)
         self.pause_spin.setSuffix(" ms")
-        for column, (caption, field) in enumerate(
-            (
-                ("Speech engine", self.engine_combo),
-                ("American voice", self.gender_combo),
-                ("Voice", self.voice_combo),
-                ("Speaking rate", self.rate_spin),
-                ("Sentence pause", self.pause_spin),
-            )
+        for caption, field in (
+            ("Speech engine", self.engine_combo),
+            ("American voice", self.gender_combo),
+            ("Voice", self.voice_combo),
+            ("Speaking rate", self.rate_spin),
+            ("Sentence pause", self.pause_spin),
         ):
-            field_row, field_column = divmod(column, 3)
-            fields.addWidget(label(caption, "muted"), 2 * field_row, field_column)
             field.setAccessibleName(tr(caption))
-            fields.addWidget(field, 2 * field_row + 1, field_column)
-        fields.setColumnStretch(0, 3)
-        fields.setColumnStretch(1, 2)
-        fields.setColumnStretch(2, 3)
-        voice_layout.addLayout(fields)
-        self.engine_hint_label = label(
-            "Online service · your reviewed text is sent only after explicit permission.",
-            "micro",
-            wrap=True,
-        )
-        voice_layout.addWidget(self.engine_hint_label)
+            field.setToolTip(tr(caption))
+        self.engine_hint_label = label("", "micro", wrap=True)
         self.engine_decision_status = label("", "muted", wrap=True)
         self.engine_settings_button = self._add_icon(button("Engine settings"), "settings")
         self.engine_settings_button.clicked.connect(self._show_engine_settings)
-        voice_layout.addLayout(
-            row(self.engine_decision_status, self.engine_settings_button, stretch=0)
-        )
         self.filter_check = QCheckBox(tr("Kokoro v3 audio filter"))
         self.filter_check.setChecked(True)
         self.filter_check.setToolTip(
@@ -569,22 +562,37 @@ class MainWindow(QMainWindow):
         self.output_dir_edit.setPlaceholderText(tr("Output folder"))
         self.output_dir_edit.setAccessibleName(tr("Session output directory"))
         self.output_dir_button = self._add_icon(button("Choose…"), "folder")
-        voice_layout.addWidget(self.filter_check)
-        voice_layout.addLayout(row(self.output_dir_edit, self.output_dir_button, stretch=0))
-        layout.addWidget(voice_card)
-        layout.addStretch()
+        options.addWidget(self.title_edit, 0, 0, 1, 2)
+        options.addWidget(self.encoding_combo, 0, 2)
+        options.addWidget(label("Sentence pause", "muted"), 0, 3)
+        options.addWidget(self.pause_spin, 0, 4)
+        options.addWidget(self.filter_check, 0, 5)
+        options.addWidget(self.output_dir_edit, 1, 0, 1, 3)
+        options.addWidget(self.output_dir_button, 1, 3)
+        options.addWidget(self.engine_settings_button, 1, 4, 1, 2)
+        options.addWidget(self.source_path_label, 2, 0, 1, 3)
+        options.addWidget(self.engine_decision_status, 2, 3, 1, 3)
+        options.addWidget(self.engine_hint_label, 3, 0, 1, 6)
+        self.more_options_toggle = disclosure("More options", self.studio_options)
+        outer.addWidget(self.studio_options)
+
         footer = QFrame()
         footer.setObjectName("Approval")
         footer_layout = QVBoxLayout(footer)
-        footer_layout.setContentsMargins(26, 11, 26, 11)
-        footer_layout.setSpacing(6)
-        self.studio_status_label = label("Review your text before generation.", "muted", wrap=True)
-        self.generation_summary = label("", "muted", wrap=True)
+        footer_layout.setContentsMargins(26, 10, 26, 12)
+        footer_layout.setSpacing(4)
+        self.studio_status_label = OptionalStatusLabel()
+        self.studio_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.studio_status_label.setProperty("role", "error")
+        self.studio_status_label.setWordWrap(True)
+        self.studio_status_label.clear()
+        self.online_notice = label("", "muted", wrap=True)
+        self.generation_summary = label("", "muted")
         self.generation_summary.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        status_row = row(self.studio_status_label, self.generation_summary, stretch=0)
-        status_row.setStretch(1, 1)
+        status_row = row(self.studio_status_label, self.online_notice, self.generation_summary)
+        status_row.setStretchFactor(self.generation_summary, 1)
         footer_layout.addLayout(status_row)
         self.approval_check = QCheckBox(tr("I approve this reviewed text"))
         self.approval_check.setEnabled(False)
@@ -596,48 +604,60 @@ class MainWindow(QMainWindow):
         self.approval_check.hide()
         self.preview_button.hide()
         self.generate_button = button("Generate Audio", primary=True)
+        self.generate_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.generate_button.setEnabled(False)
         self.cancel_generation_button = button("Cancel Preparation")
         self.cancel_generation_button.hide()
-        self.online_notice = label("", "micro", wrap=True)
-        generate_actions = row(self.online_notice)
+        generate_actions = QHBoxLayout()
+        generate_actions.setSpacing(4)
+        for control in (
+            self.engine_combo,
+            self.gender_combo,
+            self.voice_combo,
+            self.rate_spin,
+            self.more_options_toggle,
+        ):
+            generate_actions.addWidget(control)
         generate_actions.addStretch()
-        generate_actions.addWidget(self.cancel_generation_button)
         generate_actions.addWidget(self.generate_button)
+        # Cancellation is transient; placing it beside the status keeps all voice
+        # controls usable even in the minimum supported window.
+        status_row.insertWidget(2, self.cancel_generation_button)
         footer_layout.addLayout(generate_actions)
-        page.layout().addWidget(footer)
+        outer.addWidget(footer)
         return page
 
     def _library_page(self) -> QWidget:
-        page, layout = self._page(
-            "Your library",
-            "Saved sessions and finished audio, together on this device.",
-            scroll=False,
-        )
+        page, layout = self._page("", "", scroll=False)
         self.library_search = QLineEdit()
         self.library_search.setPlaceholderText(tr("Search title, engine or job ID"))
+        self.library_search.setMaximumWidth(260)
         self.library_search.setClearButtonEnabled(True)
         self.library_search.setAccessibleName(tr("Search local library"))
         self.library_choose_folder_button = self._add_icon(
             button("Open existing folder…"), "folder"
         )
         self.library_refresh_button = self._add_icon(button("Refresh"), "refresh")
-        layout.addLayout(
-            row(
-                self.library_search,
-                self.library_choose_folder_button,
-                self.library_refresh_button,
-                stretch=0,
-            )
-        )
+        filters = QHBoxLayout()
+        filters.addWidget(label("Library", "title"))
+        filters.addWidget(self.library_search, 1)
+        filters.addStretch()
+        filters.addWidget(self.library_choose_folder_button)
+        filters.addWidget(self.library_refresh_button)
+        layout.addLayout(filters)
         self.library_root_label = label(
             "Choose an output folder to discover existing job manifests.", "muted", wrap=True
         )
         self.library_root_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        layout.addWidget(self.library_root_label)
-        self.library_table = table(["Session", "Status", "Engine", "Duration"])
+        self.library_table = table(["Session", "Status", "Engine", "Duration", "Created"])
+        for col, width in enumerate((120, 130, 90, 140), 1):
+            self.library_table.horizontalHeader().setSectionResizeMode(
+                col, QHeaderView.ResizeMode.Fixed
+            )
+            self.library_table.setColumnWidth(col, width)
+        self.library_table.setColumnHidden(4, self.width() < 1040)
         layout.addWidget(self.library_table, 1)
         self.library_empty_label = label(
             "Your library is empty. Create a session or open a folder that contains Lextide jobs.",
@@ -648,7 +668,7 @@ class MainWindow(QMainWindow):
         self.library_load_button = self._add_icon(
             button("Verify && open in Listen", primary=True), "headphones"
         )
-        self.library_open_button = self._add_icon(button("Show output folder"), "folder")
+        self.library_open_button = self._add_icon(button("Show files"), "folder")
         self.library_load_button.setEnabled(False)
         self.library_load_button.setToolTip(
             tr(
@@ -657,41 +677,49 @@ class MainWindow(QMainWindow):
             )
         )
         self.library_open_button.setEnabled(False)
-        actions = row(self.library_load_button, self.library_open_button)
-        actions.addStretch()
-        layout.addLayout(actions)
-        layout.addWidget(
-            label(
-                "Select a session above to enable Verify & open in Listen, or double-click it. "
-                "Files are verified before playback. A missing file keeps its history record "
-                "and can be located in an existing folder.",
-                "micro",
-                wrap=True,
-            )
+        self.library_script_button = button("Load script in Studio")
+        self.library_script_button.setEnabled(False)
+        inspector = QFrame()
+        inspector.setObjectName("LibraryInspector")
+        inspector.setFixedHeight(58)
+        actions = QHBoxLayout(inspector)
+        actions.setContentsMargins(6, 4, 6, 4)
+        self.library_root_label.setMinimumWidth(0)
+        self.library_root_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
+        actions.addWidget(self.library_root_label, 1)
+        for control in (
+            self.library_open_button,
+            self.library_script_button,
+            self.library_load_button,
+        ):
+            actions.addWidget(control)
+        layout.addWidget(inspector)
         return page
 
     def _listen_page(self) -> QWidget:
         page = QWidget()
         page.setObjectName("Page")
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(22, 10, 22, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(20, 12, 20, 8)
+        layout.setSpacing(6)
         self.listen_header = QWidget()
-        header = QVBoxLayout(self.listen_header)
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(2)
+        self.listen_header.setFixedHeight(32)
+        self.listen_header_row = QHBoxLayout(self.listen_header)
+        self.listen_header_row.setContentsMargins(0, 0, 0, 0)
+        self.listen_header_row.setSpacing(10)
         title = label("Listen", "title")
-        title.setStyleSheet("font-size: 24px;")
+        title.setStyleSheet("font-size: 22px;")
+        self.listen_subtitle = label("Read synchronized subtitles while listening", "muted")
         self.focus_check = QCheckBox(tr("Focus view"))
-        header.addLayout(row(title, self.focus_check, stretch=0))
-        self.listen_subtitle = label(
-            "One sentence at a time. A little more space to listen.", "muted", wrap=True
-        )
-        header.addWidget(self.listen_subtitle)
+        self.listen_header_row.addWidget(title)
+        self.listen_header_row.addWidget(self.listen_subtitle)
+        self.listen_header_row.addStretch()
+        self.listen_header_row.addWidget(self.focus_check)
         layout.addWidget(self.listen_header)
-        self.listen_reader, reader_layout = box(margins=8)
-        reader_layout.setSpacing(4)
+        self.listen_reader, reader_layout = box("ListenReader", margins=0)
+        reader_layout.setSpacing(6)
         self.listen_reader.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.subtitle_mode_combo = QComboBox()
         self.subtitle_mode_combo.addItem(tr("English Only"), "english")
@@ -720,18 +748,18 @@ class MainWindow(QMainWindow):
             self.font_combo.addItem(f"{pixels} px", pixels)
         self.font_combo.setCurrentIndex(self.font_combo.findData(18))
         self.font_combo.setAccessibleName(tr("Transcript font size"))
-        reader_layout.addLayout(
-            row(
-                label("Transcript", "heading"),
-                self.subtitle_mode_combo,
-                label("Text size", "micro"),
-                self.font_combo,
-                stretch=0,
-            )
-        )
-        # Secondary actions stay compact; status remains visible even in Focus view
-        # so missing or unsafe translations never look like a successful import.
-        reader_layout.addLayout(row(self.translation_tools, self.subtitle_status_label, stretch=1))
+        self.follow_check = QCheckBox(tr("Follow current sentence"))
+        self.follow_check.setChecked(True)
+        self.subtitle_mode_combo.setMinimumWidth(156)
+        self.font_combo.setMinimumWidth(86)
+        self.reader_controls = QHBoxLayout()
+        self.reader_controls.setSpacing(8)
+        self.reader_controls.addWidget(self.follow_check)
+        self.reader_controls.addSpacing(8)
+        self.reader_controls.addStretch()
+        self.reader_controls.addWidget(self.subtitle_mode_combo)
+        self.reader_controls.addWidget(self.font_combo)
+        reader_layout.addLayout(self.reader_controls)
         self.transcript_list = QListWidget()
         self.transcript_list.setItemDelegate(TranscriptDelegate(self.transcript_list))
         self.transcript_list.setObjectName("Transcript")
@@ -753,6 +781,9 @@ class MainWindow(QMainWindow):
         self.transcript_empty = QWidget()
         empty = QVBoxLayout(self.transcript_empty)
         empty.addStretch()
+        self.empty_headphones = QLabel()
+        self.empty_headphones.setFixedSize(24, 24)
+        empty.addWidget(self.empty_headphones, alignment=Qt.AlignmentFlag.AlignHCenter)
         for text, role in (
             ("No session loaded", "heading"),
             ("Open a session from Library", "muted"),
@@ -767,8 +798,6 @@ class MainWindow(QMainWindow):
         self.transcript_stack.addWidget(self.transcript_empty)
         self.transcript_stack.addWidget(self.transcript_list)
         reader_layout.addWidget(self.transcript_stack, 1)
-        self.follow_check = QCheckBox(tr("Follow current sentence"))
-        self.follow_check.setChecked(True)
         self.transcript_list.setToolTip(tr("Select a sentence to seek to its beginning."))
         layout.addWidget(self.listen_reader, 1)
         self.listen_aside, aside = box(margins=12)
@@ -790,9 +819,14 @@ class MainWindow(QMainWindow):
         aside.addWidget(self.listen_open_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self.session_details_toggle = disclosure("Session details", self.listen_aside)
         self.session_details_toggle.setStyleSheet("padding: 4px 8px;")
-        footer = row(self.follow_check, self.session_details_toggle)
-        footer.insertStretch(1)
-        reader_layout.addLayout(footer)
+        reader_layout.addLayout(
+            row(
+                self.translation_tools,
+                self.subtitle_status_label,
+                self.session_details_toggle,
+                stretch=1,
+            )
+        )
         layout.addWidget(self.listen_aside)
         self.translation_tools.hide()
         self.subtitle_status_label.hide()
@@ -853,6 +887,7 @@ class MainWindow(QMainWindow):
         page, layout = self._page(
             "Settings", "A quiet workspace. Clear choices about what stays here."
         )
+        layout.parentWidget().setMaximumWidth(872)  # 820 pt form + 26 pt outer margins.
         layout.addWidget(label("Appearance", "heading"))
         appearance, appearance_layout = box()
         self.theme_combo = QComboBox()
@@ -865,6 +900,8 @@ class MainWindow(QMainWindow):
         self.language_combo.setCurrentIndex(self.language_combo.findData(current_language()))
         self.language_combo.setAccessibleName(tr("Interface language"))
         appearance_layout.addLayout(row(label("Language"), self.language_combo, stretch=0))
+        for combo in (self.theme_combo, self.language_combo):
+            combo.setFixedWidth(180)
         self.language_hint = label(
             "Save to apply the language immediately.",
             "muted",
@@ -978,6 +1015,16 @@ class MainWindow(QMainWindow):
         advanced_layout.addWidget(self.ocr_diagnostic)
         layout.addWidget(label("Privacy & storage", "heading"))
         storage, storage_layout = box()
+        self.settings_output_dir_edit = QLineEdit()
+        self.settings_output_dir_edit.setPlaceholderText(tr("Default output folder"))
+        self.settings_output_dir_button = self._add_icon(button("Choose…"), "folder")
+        storage_layout.addWidget(label("Default output folder", "heading"))
+        storage_layout.addLayout(
+            row(self.settings_output_dir_edit, self.settings_output_dir_button, stretch=0)
+        )
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.HLine)
+        storage_layout.addWidget(divider)
         storage_layout.addWidget(label("Online text transmission", "heading"))
         storage_layout.addWidget(
             label(
@@ -987,25 +1034,14 @@ class MainWindow(QMainWindow):
                 wrap=True,
             )
         )
-        self.settings_output_dir_edit = QLineEdit()
-        self.settings_output_dir_edit.setPlaceholderText(tr("Default output folder"))
-        self.settings_output_dir_button = self._add_icon(button("Choose…"), "folder")
-        storage_layout.addLayout(
-            row(self.settings_output_dir_edit, self.settings_output_dir_button, stretch=0)
-        )
-        storage_layout.addWidget(
-            label(
-                "Existing audio stays playable offline. Cache, finished audio and model files "
-                "are separate; this version does not automatically delete them.",
-                "micro",
-                wrap=True,
-            )
-        )
         layout.addWidget(storage)
         self.settings_advanced_toggle = disclosure(
             "Advanced diagnostics", self.settings_advanced_content
         )
-        layout.addWidget(self.settings_advanced_toggle, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.runtime_summary = label("Kokoro · Not checked", "muted")
+        advanced_header = row(self.settings_advanced_toggle, self.runtime_summary)
+        advanced_header.addStretch()
+        layout.addLayout(advanced_header)
         layout.addWidget(self.settings_advanced_content)
         layout.addStretch()
         self.settings_footer = QFrame()
@@ -1016,6 +1052,8 @@ class MainWindow(QMainWindow):
         self.settings_save_button = button("Save Settings", primary=True)
         self.save_settings = self.settings_save_button
         save_layout.addWidget(self.settings_save_status, 1)
+        self.settings_reset_button = button("Reset changes")
+        save_layout.addWidget(self.settings_reset_button)
         save_layout.addWidget(self.settings_save_button)
         page.layout().addWidget(self.settings_footer)
         return page
@@ -1023,8 +1061,6 @@ class MainWindow(QMainWindow):
     def _player(self) -> QFrame:
         frame = QFrame()
         frame.setObjectName("Player")
-        frame.setMinimumHeight(78)
-        frame.setMaximumHeight(88)
         layout = QHBoxLayout(frame)
         layout.setContentsMargins(20, 10, 20, 10)
         layout.setSpacing(10)
@@ -1034,11 +1070,14 @@ class MainWindow(QMainWindow):
         identity_layout = QVBoxLayout(identity)
         identity_layout.setContentsMargins(0, 0, 0, 0)
         identity_layout.setSpacing(4)
-        self.player_title_label = label("No audio loaded")
+        self.player_title_label = ElidedPlayerLabel(tr("No audio loaded"))
+        self.player_title_label.setTextFormat(Qt.TextFormat.PlainText)
         self.player_title_label.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
-        self.player_detail_label = label("Open a session in Library", "micro")
+        self.player_detail_label = ElidedPlayerLabel(tr("Open a session in Library"))
+        self.player_detail_label.setProperty("role", "micro")
+        self.player_detail_label.setTextFormat(Qt.TextFormat.PlainText)
         self.player_detail_label.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
@@ -1050,6 +1089,8 @@ class MainWindow(QMainWindow):
         self.previous_button.setAccessibleName(tr("Previous sentence"))
         self.play_button = self._add_icon(button(""), "play")
         self.play_button.setObjectName("PlayButton")
+        self.play_button.setFixedSize(36, 36)
+        self.play_button.setIconSize(QSize(16, 16))
         self.play_button.setToolTip(tr("Play / pause"))
         self.play_button.setAccessibleName(tr("Play or pause audio"))
         self.next_button = self._add_icon(button("", quiet=True), "skip-forward")
@@ -1061,8 +1102,14 @@ class MainWindow(QMainWindow):
             layout.addWidget(control)
         self.position_label = label("00:00", "micro")
         self.duration_label = label("00:00", "micro")
-        self.position_label.setMinimumWidth(34)
-        self.duration_label.setMinimumWidth(34)
+        clock_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        clock_font.setPixelSize(12)
+        for clock in (self.position_label, self.duration_label):
+            clock.setFont(clock_font)
+            clock.setStyleSheet("font-size: 12px;")
+            clock.setMinimumWidth(clock.fontMetrics().horizontalAdvance("00:00:00"))
+            clock.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.duration_label.setText("--:--")
         self.seek_slider = QSlider(Qt.Orientation.Horizontal)
         self.seek_slider.setObjectName("PlaybackSeek")
         self.seek_slider.setRange(0, 0)
@@ -1089,6 +1136,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.volume_slider)
         return frame
 
+    def set_player_loaded(self, loaded: bool) -> None:
+        height = 64 if loaded else 56
+        if self.player_bar.maximumHeight() != height:
+            self.player_bar.setFixedHeight(height)
+            self.player_bar.layout().setContentsMargins(
+                20, 8 if loaded else 9, 20, 8 if loaded else 10
+            )
+            self.player_detail_label.setVisible(loaded)
+
     def _shortcuts(self) -> None:
         for shortcut, callback, title in (
             (QKeySequence.StandardKey.Open, self.import_button.click, "Import file"),
@@ -1103,6 +1159,14 @@ class MainWindow(QMainWindow):
         name = next((page for page in self.PAGES if page.lower() == name.lower()), name)
         if name not in self.pages:
             raise ValueError(f"Unknown Lextide page: {name}")
+        # Keep a single Cmd+O action and Import button when changing surfaces.
+        if name == "Studio":
+            self.studio_header.addWidget(self.import_button)
+        elif self.import_button.parentWidget() is not self.toolbar:
+            self.toolbar.layout().insertWidget(
+                self.toolbar.layout().indexOf(self.new_project_button), self.import_button
+            )
+        self.import_button.show()
         self.page_stack.setCurrentWidget(self.pages[name])
         self.breadcrumb_label.setText(tr(name))
         for page, control in self.nav_buttons.items():
@@ -1112,11 +1176,26 @@ class MainWindow(QMainWindow):
         self._refresh_icons()
         self.page_changed.emit(name)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        compact_studio = event.size().width() < 1080
+        self.studio_intro.setVisible(not compact_studio)
+        self.preview_badge.setText(
+            tr("Not yet applied") if compact_studio else tr("Preview — not yet applied")
+        )
+        self.library_table.setColumnHidden(4, event.size().width() < 1040)
+
     def set_theme(self, preference: str = "system") -> None:
         self._theme_preference = (
             preference if preference in {"system", "light", "dark"} else "system"
         )
         self._colors = apply_theme(self._theme_preference)
+        self.overview_view.set_dark(resolved_theme(self._theme_preference) == "dark")
+        # Hidden Qt layouts defer geometry until first shown. Compute the tray's
+        # intrinsic size with the actual theme so its initial rows match their controls.
+        if self.studio_options.isHidden():
+            self.studio_options.layout().invalidate()
+            self.studio_options.adjustSize()
         self._refresh_icons()
 
     def _system_theme_changed(self, _scheme: Qt.ColorScheme) -> None:
@@ -1127,24 +1206,44 @@ class MainWindow(QMainWindow):
         colors = getattr(self, "_colors", None)
         if not colors:
             return
+        self.empty_headphones.setPixmap(icon("headphones", colors["muted"], 24).pixmap(24, 24))
         for control, resource in self._icons:
             if control is getattr(self, "play_button", None):
-                resource = "pause" if self._playing else "play"
+                self._refresh_play_icon()
+                continue
             color = colors["on_accent"] if control.property("primary") else colors["muted"]
             if control.objectName() == "NavButton" and control.isChecked():
                 color = colors["accent"]
-            control.setIcon(icon(resource, color))
+            image = icon(resource, color)
+            if control.property("primary"):
+                disabled = icon(resource, colors["disabled"])
+                image.addPixmap(disabled.pixmap(control.iconSize()), QIcon.Mode.Disabled)
+            control.setIcon(image)
+
+    def _refresh_play_icon(self) -> None:
+        resource = "pause" if self._playing else "play"
+        image = icon(resource, self._colors["on_accent"], 16)
+        disabled = icon(resource, self._colors["disabled"], 16)
+        image.addPixmap(disabled.pixmap(self.play_button.iconSize()), QIcon.Mode.Disabled)
+        self.play_button.setIcon(image)
 
     def set_playing(self, playing: bool) -> None:
         self._playing = playing
-        self.play_button.setIcon(icon("pause" if playing else "play", self._colors["text"]))
+        self._refresh_play_icon()
         self.play_button.setToolTip(tr("Pause") if playing else tr("Play"))
         self.play_button.setAccessibleName(tr("Pause audio") if playing else tr("Play audio"))
 
     def _set_focus_mode(self, enabled: bool) -> None:
         self.sidebar.setVisible(not enabled)
         self.toolbar.setVisible(not enabled)
+        row = self.reader_controls if enabled else self.listen_header_row
+        row.addWidget(self.focus_check)
+        self.focus_check.show()
+        self.listen_header.setVisible(not enabled)
         self.listen_subtitle.setVisible(not enabled)
+        self.pages["Listen"].layout().setContentsMargins(
+            22 if enabled else 20, 10 if enabled else 12, 22 if enabled else 20, 8
+        )
         self.translation_tools.setVisible(not enabled and bool(self._cues))
         self.focus_check.setText(tr("Exit focus view") if enabled else tr("Focus view"))
         self.session_details_toggle.setVisible(not enabled)
@@ -1198,6 +1297,8 @@ class MainWindow(QMainWindow):
         selected = widget.item(widget.currentRow(), 0)
         selected_path = selected.data(Qt.ItemDataRole.UserRole).get("path") if selected else None
         widget.setUpdatesEnabled(False)
+        sorting = widget.isSortingEnabled()
+        widget.setSortingEnabled(False)
         widget.setRowCount(len(rows))
         for row_index, record in enumerate(rows):
             for column, key in enumerate(columns):
@@ -1218,10 +1319,17 @@ class MainWindow(QMainWindow):
                     value = record.get(key, "—")
                 item = QTableWidgetItem(value if isinstance(value, str) else str(value))
                 item.setData(Qt.ItemDataRole.UserRole, dict(record))
+                if key == "duration_seconds":
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                    )
+                if key == "status":
+                    item.setIcon(status_dot(str(record.get(key, "")), widget.palette()))
                 item.setToolTip(str(record.get("path") or record.get("export_path") or value))
                 widget.setItem(row_index, column, item)
             if selected_path and record.get("path") == selected_path:
                 widget.selectRow(row_index)
+        widget.setSortingEnabled(sorting)
         widget.setUpdatesEnabled(True)
 
     def set_history(self, rows: Sequence[dict[str, Any]]) -> None:
@@ -1231,14 +1339,11 @@ class MainWindow(QMainWindow):
         self.recent_table.setVisible(bool(rows))
         self.overview_summary_label.setText(
             tr(
-                "{count} saved sessions in the selected folder. "
-                "Open Library to verify files and continue listening.",
+                "Found {count} local tasks/sessions. Files are verified before playback.",
                 count=len(rows),
             )
             if rows
-            else tr(
-                "No sessions found. Create a session or open an existing output folder in Library."
-            )
+            else tr("No local sessions yet. Import text to create your first listening session.")
         )
         self._filter_history()
 
@@ -1254,7 +1359,9 @@ class MainWindow(QMainWindow):
             ).casefold()
         ]
         self._fill_table(
-            self.library_table, rows, ("title", "status", "engine", "duration_seconds")
+            self.library_table,
+            rows,
+            ("title", "status", "engine", "duration_seconds", "created_at"),
         )
         self.library_empty_label.setVisible(not rows)
         self.library_empty_label.setText(
@@ -1271,6 +1378,7 @@ class MainWindow(QMainWindow):
         selected = self.library_table.currentRow() >= 0 and bool(self.library_table.selectedItems())
         self.library_load_button.setEnabled(selected)
         self.library_open_button.setEnabled(selected)
+        self.library_script_button.setEnabled(selected)
 
     def set_tasks(self, rows: Sequence[dict[str, Any]]) -> None:
         self._fill_table(self.tasks_table, rows, ("title", "status", "engine", "chunks"))
@@ -1282,6 +1390,7 @@ class MainWindow(QMainWindow):
         )
         self.translation_tools.setVisible(bool(self._cues) and not self.focus_check.isChecked())
         self.subtitle_status_label.setVisible(bool(self._cues))
+        self.transcript_list.setProperty("active_cue", -1)
         self.transcript_list.clear()
         for index, cue in enumerate(cues):
             if isinstance(cue, dict):
@@ -1295,13 +1404,16 @@ class MainWindow(QMainWindow):
             self.transcript_list.addItem(item)
 
     def set_active_cue(self, index: int) -> None:
+        self.transcript_list.setProperty("active_cue", index)
+        self.transcript_list.viewport().update()
+        if not self.follow_check.isChecked():
+            return
         if not 0 <= index < self.transcript_list.count():
             self.transcript_list.clearSelection()
             return
         item = self.transcript_list.item(index)
         self.transcript_list.setCurrentItem(item)
-        if self.follow_check.isChecked():
-            self.transcript_list.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtCenter)
+        self.transcript_list.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtCenter)
 
     def set_subtitle_mode(self, mode: str) -> None:
         self.transcript_list.setProperty("subtitle_mode", mode)

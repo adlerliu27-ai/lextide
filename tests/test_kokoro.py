@@ -213,7 +213,8 @@ def test_default_runtime_and_override_are_explicit(monkeypatch):
     monkeypatch.setattr(adapter.shutil, "which", which)
     monkeypatch.delenv("LEXTIDE_OFFLINE_PYTHON", raising=False)
     KokoroEngine()._python()
-    assert seen[-1].endswith("TTS-Studio/offline-runtime/.venv/bin/python")
+    checkout = Path(__file__).resolve().parents[1]
+    assert Path(seen[-1]) == checkout / "offline-runtime/.venv/bin/python"
     monkeypatch.setenv("LEXTIDE_OFFLINE_PYTHON", "/runtime/from-environment")
     KokoroEngine()._python()
     assert seen[-1] == "/runtime/from-environment"

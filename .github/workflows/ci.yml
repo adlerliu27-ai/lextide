@@ -48,4 +48,16 @@ jobs:
             tests/test_g7_bilingual.py \
             tests/test_g8_engine_policy.py \
             tests/test_g9_reading.py \
+            tests/test_ocr_benchmark.py \
             tests/test_source_snapshot.py
+      - name: Install locked desktop extras for local OCR review
+        run: uv sync --locked --extra desktop --no-default-groups --group dev --python 3.13
+      - name: Run OCR service, worker and review regressions
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          uv run --no-sync --offline --python 3.13 python -m pytest -rs \
+            --basetemp=.artifacts/ci/ocr \
+            tests/test_g10_image_ocr.py tests/test_g10_ocr_partial.py \
+            tests/test_g10_ocr_gui.py tests/test_g10_partial_review_gui.py \
+            tests/test_g1011_ocr_lifecycle.py

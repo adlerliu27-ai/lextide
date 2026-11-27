@@ -7,8 +7,16 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QSignalBlocker, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QTextCursor
-from PySide6.QtWidgets import QApplication, QDialogButtonBox, QFileDialog, QMessageBox, QVBoxLayout
+from PySide6.QtGui import QDesktopServices, QFontDatabase, QTextCursor, QTextOption
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialogButtonBox,
+    QFileDialog,
+    QGridLayout,
+    QMessageBox,
+    QTextEdit,
+    QVBoxLayout,
+)
 
 from ..config import Settings
 from ..errors import StudioError
@@ -20,7 +28,8 @@ from .engine_policy import resolve_engine
 from .i18n import current_language, join_translated, tr
 from .localized import QCheckBox, QDialog, QLabel, QPlainTextEdit, bind_text
 from .messages import cleaning_reason, localize_error, localize_note
-from .ocr_ui import choose_image_ocr, review_partial_ocr
+from .ocr_preview import ReviewImage
+from .ocr_ui import choose_image_ocr, dismiss_partial_review, review_partial_ocr
 from .player import LocalPlayer
 from .preferences import load_preferences, save_preferences
 from .process import WorkerClient
@@ -30,28 +39,60 @@ def confirm_transmission(parent, text: str, settings: dict, sha256: str) -> bool
     """Every invocation starts unchecked. No approval is stored in preferences."""
     dialog = QDialog(parent)
     dialog.setWindowTitle(tr("Approve this online transmission"))
-    dialog.resize(740, 570)
+    dialog.resize(540, 470)
     layout = QVBoxLayout(dialog)
-    label = QLabel(
-        tr(
-            "All text below will be sent to Microsoft Edge TTS.\n"
-            "Only this speech text and voice settings are sent, not source files or paths.\n"
-            "Voice: {voice}    Rate: {rate}\nText SHA-256: {sha}",
-            voice=settings["voice"],
-            rate=settings["rate"],
-            sha=sha256,
-        )
+    layout.setContentsMargins(20, 18, 20, 18)
+    layout.setSpacing(8)
+    scope = QLabel(
+        tr("Only the text below and the voice settings will be sent to Microsoft Edge TTS.")
     )
-    label.setWordWrap(True)
-    layout.addWidget(label)
+    scope.setWordWrap(True)
+    layout.addWidget(scope)
+    fields = QGridLayout()
+    fields.setColumnStretch(1, 1)
+    for row, (caption, value) in enumerate(
+        (
+            ("Speech engine", tr("Edge online")),
+            ("Voice", settings["voice"]),
+            ("Speaking rate", settings["rate"]),
+        )
+    ):
+        name = QLabel(tr(caption))
+        name.setProperty("role", "muted")
+        fields.addWidget(name, row, 0)
+        display = QLabel(value)
+        display.setTextFormat(Qt.TextFormat.PlainText)
+        display.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        fields.addWidget(display, row, 1)
+    digest_name = QLabel(tr("Text SHA-256"))
+    digest_name.setProperty("role", "muted")
+    fields.addWidget(digest_name, 3, 0, Qt.AlignmentFlag.AlignTop)
+    # Cocoa's QLabel word wrapping clips a 64-character token. A text
+    # document can wrap between glyphs without inserting copyable separators.
+    digest = QTextEdit()
+    digest.setObjectName("ConsentDigest")
+    bind_text(digest, tr("Text SHA-256"), setter="setAccessibleName")
+    digest.setReadOnly(True)
+    digest.setTabChangesFocus(True)
+    digest.setStyleSheet("QTextEdit { border: none; background: transparent; padding: 0; }")
+    digest.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+    digest.document().setDocumentMargin(0)
+    digest.setWordWrapMode(QTextOption.WrapMode.WrapAnywhere)
+    digest.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    digest.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    digest.setFixedHeight(2 * digest.fontMetrics().lineSpacing() + 4)
+    digest.setPlainText(sha256)
+    fields.addWidget(digest, 3, 1)
+    layout.addLayout(fields)
+    heading = QLabel(tr("Exact text to be sent · {count:,} characters", count=len(text)))
+    heading.setProperty("role", "heading")
+    layout.addWidget(heading)
     preview = QPlainTextEdit()
     preview.setReadOnly(True)
     preview.setPlainText(text)
     preview.setAccessibleName(tr("Complete text to be sent in this run"))
     layout.addWidget(preview, 1)
-    consent = QCheckBox(
-        tr("I explicitly allow sending all the text above and the voice settings for this run")
-    )
+    consent = QCheckBox(tr("I approve sending this text and these voice settings for this run."))
     consent.setChecked(False)
     layout.addWidget(consent)
     buttons = QDialogButtonBox(
@@ -125,7 +166,7 @@ class Controller(QObject):
 
     def _connect(self):
         w = self.w
-        for button in (w.import_button, w.overview_import_button, w.import_studio_button):
+        for button in (w.import_button, w.overview_import_button):
             button.clicked.connect(self.import_file)
         for button in (w.new_project_button, w.overview_new_button):
             button.clicked.connect(self.new_draft)
@@ -154,6 +195,7 @@ class Controller(QObject):
         w.reset_button.clicked.connect(self.reset_text)
         w.output_dir_button.clicked.connect(self.choose_output)
         w.settings_output_dir_button.clicked.connect(lambda: self.choose_output(settings=True))
+        w.settings_reset_button.clicked.connect(self.reset_settings)
         w.settings_save_button.clicked.connect(self.save_settings)
         for control in (w.language_combo,):
             control.currentIndexChanged.connect(self._settings_dirty)
@@ -169,6 +211,7 @@ class Controller(QObject):
         w.task_refresh_button.clicked.connect(self.refresh_history)
         w.library_search.textChanged.connect(self._display_history)
         w.library_choose_folder_button.clicked.connect(self.choose_library)
+        w.library_script_button.clicked.connect(self.load_selected_script)
         w.library_load_button.clicked.connect(self.load_selected)
         w.library_table.cellDoubleClicked.connect(lambda *_: self.load_selected())
         w.library_table.itemSelectionChanged.connect(self._library_details)
@@ -222,6 +265,7 @@ class Controller(QObject):
         self.auto_decision = None
         self.auto_probe_revision += 1
         self._refresh_voices()
+        self.w.runtime_summary.setText(tr("Kokoro · Not checked"))
         self.w.model_status_label.setText(tr("Local paths changed. Check local status again."))
         self.w.media_status_label.setText(
             tr("Local paths changed. Check FFmpeg and ffprobe again.")
@@ -259,10 +303,7 @@ class Controller(QObject):
         self.w.approval_check.setChecked(False)
         self.w.approval_check.setEnabled(False)
         self.w.subtitle_edit.setPlainText(self.w.speech_edit.toPlainText())
-        size = len(self.w.speech_edit.toPlainText().encode("utf-8"))
-        self.w.studio_status_label.setText(
-            tr("Review the final reading text") if size else tr("Add text to begin")
-        )
+        self.w.studio_status_label.clear()
         self._gate()
 
     def _effective_engine(self):
@@ -306,7 +347,6 @@ class Controller(QObject):
         self.w.online_notice.setVisible(online)
         self.w.cancel_generation_button.setVisible(self.pending_submission is not None)
         ready = self._ready_to_generate()
-        self.w.engine_settings_button.setVisible(not ready and engine != "edge-tts")
         if self.w.engine_combo.currentData() == "auto":
             reason = (self.auto_decision or {}).get(
                 "reason", "Checking engine availability without sending text…"
@@ -354,15 +394,29 @@ class Controller(QObject):
             summary = tr("Checking engine…")
         else:
             summary = tr("Check speech settings")
+        issue = self._reading_issue()
+        has_text = bool(self.w.speech_edit.toPlainText().strip())
+        text_blocked = bool(issue and has_text)
+        if text_blocked:
+            summary = tr(issue)
+            # Older callers also inspect studio_status_label. Render the
+            # blocking reason once, next to the action it explains.
+            self.w.studio_status_label.setText(summary)
+            self.w.studio_status_label.hide()
+        self.w.online_notice.setWordWrap(text_blocked)
+        self.w.generation_summary.setWordWrap(text_blocked)
         self.w.generation_summary.setText(summary)
         self.w.generation_summary.setToolTip(decision)
-        issue = self._reading_issue()
-        if issue and self.w.speech_edit.toPlainText().strip():
-            self.w.studio_status_label.setText(tr(issue))
+        role = "error" if text_blocked or not ready else "muted"
+        if self.w.generation_summary.property("role") != role:
+            self.w.generation_summary.setProperty("role", role)
+            style = self.w.generation_summary.style()
+            style.unpolish(self.w.generation_summary)
+            style.polish(self.w.generation_summary)
         self.w.generate_button.setEnabled(
             ready
             and not issue
-            and bool(self.w.speech_edit.toPlainText().strip())
+            and has_text
             and self.synthesis is None
             and not self.confirming
             and not self.closing
@@ -375,6 +429,7 @@ class Controller(QObject):
         english = self.w.clean_mode_combo.currentData() == "english"
         previewing = self.draft_before_preview is not None
         draft = self.w.speech_edit.toPlainText()
+        self.w.preview_badge.setVisible(previewing)
         if previewing:
             action = tr("Apply to reading text")
             self.w.reading_heading.setText(tr("English preview"))
@@ -438,6 +493,7 @@ class Controller(QObject):
             ):
                 return
             self.capabilities = {e["engine_id"]: e for e in data.get("engines", [])}
+            self._runtime_summary(data)
             self.auto_evidence = data
             self._resolve_auto_voice()
             self._refresh_voices()
@@ -487,7 +543,12 @@ class Controller(QObject):
             combo.clear()
             if choices:
                 first = choices[0]
-                combo.addItem(tr("Recommended · {name}", name=first.display_name), first.voice_id)
+                combo.addItem(tr("Auto · {name}", name=first.display_name), first.voice_id)
+                combo.setItemData(
+                    0,
+                    tr("Recommended · {name}", name=first.display_name),
+                    Qt.ItemDataRole.ToolTipRole,
+                )
                 for voice in choices:
                     combo.addItem(voice.display_name, voice.voice_id)
                 if self.pinned_voice:
@@ -920,7 +981,7 @@ class Controller(QObject):
 
         consumed = False
 
-        def completed(data):
+        def completed(data, input_path):
             nonlocal consumed
             if consumed or self.closing or self.ocr_request is not token:
                 return
@@ -932,7 +993,19 @@ class Controller(QObject):
             reading_text = None
             if data.get("review_required") is True:
                 self.w.ocr_progress.hide()
-                decision = review_partial_ocr(self.w, data["text"], options)
+                # Bind only the current worker's submitted input and acknowledged digest.
+                # A replaced file can never become the visual reference for this text.
+                preview = ReviewImage(
+                    Path(input_path),
+                    data.get("source_sha256", ""),
+                    tuple(data["ocr"]["effective_languages"]),
+                )
+                self.w._ocr_preview_source = preview
+                try:
+                    decision = review_partial_ocr(self.w, data["text"], options)
+                finally:
+                    if self.w._ocr_preview_source is preview:
+                        self.w._ocr_preview_source = None
                 if self.closing or self.ocr_request is not token:
                     return
                 if self.revision != revision:
@@ -979,7 +1052,7 @@ class Controller(QObject):
         def recognize(input_path):
             worker = self._request(
                 {"command": "image_ocr", "path": input_path, **options},
-                completed,
+                lambda data: completed(data, input_path),
                 timeout=45_000,
                 on_error=failed,
             )
@@ -1015,6 +1088,7 @@ class Controller(QObject):
         if self.ocr_request is None:
             return
         self.ocr_request = None
+        dismiss_partial_review(self.w)
         if self.ocr_worker is not None:
             self.ocr_worker.interrupt()
             self.ocr_worker = None
@@ -1547,6 +1621,28 @@ class Controller(QObject):
         if path and self._remember_root(path):
             self.refresh_history()
 
+    def load_selected_script(self):
+        row = self._selected(self.w.library_table)
+        if not row or self.ocr_request is not None:
+            return
+        if self.w.speech_edit.toPlainText() or self.w.source_edit.toPlainText():
+            if (
+                QMessageBox.question(
+                    self.w, tr("Load script in Studio"), tr("Replace the current Studio draft?")
+                )
+                != QMessageBox.StandardButton.Yes
+            ):
+                return
+        revision = self.revision
+
+        def loaded(data):
+            if not self.closing and self.ocr_request is None:
+                self._imported(
+                    {**data, "source_name": row.get("title") or tr("Untitled session")}, revision
+                )
+
+        self._request({"command": "library_script", "path": row["path"]}, loaded)
+
     def load_selected(self, *, recent=False):
         row = self._selected(self.w.recent_table if recent else self.w.library_table)
         if row:
@@ -1638,7 +1734,20 @@ class Controller(QObject):
             and self._settings_values() != self.settings_saved_snapshot
         )
         self.w.settings_save_button.setEnabled(dirty)
-        self.w.settings_save_status.setText(tr("Unsaved changes") if dirty else "")
+        self.w.settings_reset_button.setEnabled(dirty)
+        self.w.settings_save_status.setText(
+            tr("Unsaved changes") if dirty else tr("All changes saved")
+        )
+
+    def reset_settings(self):
+        saved = self.settings_saved_snapshot
+        if saved is None:
+            return
+        self.w.language_combo.setCurrentIndex(self.w.language_combo.findData(saved["language"]))
+        self.w.settings_output_dir_edit.setText(saved["out_dir"])
+        for key in ("model_dir", "offline_python", "ffmpeg", "ffprobe"):
+            getattr(self.w, f"{key}_edit").setText(saved[key])
+        self._settings_dirty()
 
     def save_settings(self):
         values = self._settings_values()
@@ -1734,7 +1843,16 @@ class Controller(QObject):
             else None,
         )
 
+    def _runtime_summary(self, data):
+        verified = data.get("model", {}).get("ready") and data.get("offline_runtime", {}).get(
+            "ready"
+        )
+        self.w.runtime_summary.setText(
+            tr("Kokoro · Ready") if verified else tr("Kokoro · Not configured")
+        )
+
     def _engines(self, data):
+        self._runtime_summary(data)
         self.capabilities = {e["engine_id"]: e for e in data.get("engines", [])}
         model = data.get("model", {})
         media = data.get("media_tools", {})
@@ -1793,6 +1911,7 @@ class Controller(QObject):
         if self.closing:
             return
         self.closing = True
+        dismiss_partial_review(self.w)
         self._release_clipboard_image()
         self.pending_submission = None
         self.confirming = False

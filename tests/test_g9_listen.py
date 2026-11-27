@@ -119,6 +119,31 @@ def test_loading_removes_empty_state_without_repeating_title_in_header(desktop):
     assert w.focus_check.text() == tr("Focus view")
 
 
+def test_reader_controls_and_translation_actions_share_rows_after_resize(desktop):
+    app, w, c = desktop
+    load_session(w, c)
+    for width in (1180, 980, 1440):
+        w.resize(width, 768)
+        app.processEvents()
+        list_top = w.transcript_list.mapTo(w, QPoint()).y()
+        list_bottom = list_top + w.transcript_list.height()
+        for controls, above in (
+            ((w.follow_check, w.subtitle_mode_combo, w.font_combo), True),
+            ((w.subtitle_import_button, w.subtitle_edit_button, w.session_details_toggle), False),
+        ):
+            # Each group fits on one line, before or after the transcript in reading order.
+            corners = [widget.mapTo(w, QPoint()) for widget in controls]
+            tops = [corner.y() for corner in corners]
+            bottoms = [top + widget.height() for top, widget in zip(tops, controls, strict=True)]
+            assert max(tops) < min(bottoms)
+            if above:
+                assert max(bottoms) <= list_top
+            else:
+                assert min(tops) >= list_bottom
+            for index in range(len(controls) - 1):
+                assert corners[index].x() + controls[index].width() <= corners[index + 1].x()
+
+
 @pytest.mark.parametrize("size", [(1440, 900), (1280, 800), (1024, 768)])
 @pytest.mark.parametrize("loaded", [False, True])
 def test_transcript_expands_with_viewport_without_page_scrolling(desktop, size, loaded):

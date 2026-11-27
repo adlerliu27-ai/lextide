@@ -8,16 +8,17 @@ Lextide is a Python learning project for macOS: prepare a reading script, explic
 
 **0.6.1 is the first public source release.** G1–G6 passed independent engineering validation and user acceptance; the two G6 findings in Edge quotation metadata and mixed English/Chinese preparation were retested and are closed (`G6_PASS` / `USER_ACCEPTED`).
 
-The latest public source release is [v0.10.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.10.0). This repository publishes **source only**; the released source matches that tag. A newer Carbon interface is under development locally and is not part of any public release yet.
+The latest public **release** is [v0.10.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.10.0); its tag and source archive are unchanged. This repository publishes **source only**.
+
+`main` now carries the **G10.2.2 development milestone** (`0.10.0` internals), which includes the refined native interface, the OCR original-image comparison, the dynamic idle/loaded player and the playback-rate label fix. Those changes are **in `main` only** — the `v0.10.0` release archive predates them.
 
 The source code is released under the [MIT License](LICENSE). Brand artwork is reserved and governed by [TRADEMARKS.md](TRADEMARKS.md); the exact asset scope is in [ASSETS_LICENSE.md](ASSETS_LICENSE.md). This release is **source only** — it does not include, and does not authorize, a public `.app` distribution.
 
-### Development preview — Carbon interface
+### Current interface (`main`, G10.2.2 milestone)
 
-> **Not a public release.** The screenshots below show the Carbon interface under local development.
-> It is built and regression-tested on this machine, but it has **not** been published, notarized or
-> accepted for release. The released source at [v0.10.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.10.0)
-> predates this layout.
+> **Source in `main`, no new binary release.** These screenshots show the interface that `main` builds.
+> There is still **no signed or notarized `.app`** — the repository ships source only, and the
+> `v0.10.0` release archive predates this layout.
 
 | | |
 |---|---|

@@ -206,8 +206,8 @@ def test_time_column_and_bilingual_body_share_exact_draw_alignment(
             draws.append((self.text, self.font.pixelSize(), origin.x(), origin.y()))
             self.wrapped.draw(painter, origin)
 
-    def capture(text, font, width):
-        wrapped, height = original_layout(text, font, width)
+    def capture(text, font, width, leading=1.42):
+        wrapped, height = original_layout(text, font, width, leading)
         return CaptureLayout(text, font, wrapped), height
 
     monkeypatch.setattr(bilingual_ui, "_text_layout", capture)
@@ -228,7 +228,7 @@ def test_time_column_and_bilingual_body_share_exact_draw_alignment(
     assert by_text[chinese][1] == round(pixels * 0.8)
     _, english_height = original_layout(english, widget.font(), delegate._body_width())
     _, chinese_height = original_layout(
-        chinese, delegate.chinese_font(widget.font()), delegate._body_width()
+        chinese, delegate.chinese_font(widget.font()), delegate._body_width(), 1.48
     )
     assert option.rect.height() >= (
         ceil(english_height + chinese_height + 6) + delegate.TOP_PADDING + delegate.BOTTOM_PADDING

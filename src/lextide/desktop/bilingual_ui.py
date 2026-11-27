@@ -5,8 +5,18 @@ from __future__ import annotations
 from math import ceil
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QPointF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPalette, QTextLayout, QTextOption
+from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QFontDatabase,
+    QFontMetricsF,
+    QPainter,
+    QPalette,
+    QPen,
+    QTextLayout,
+    QTextOption,
+)
 from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
@@ -30,20 +40,21 @@ from .localized import QCheckBox, QDialog, QLabel, QPlainTextEdit, bind_text
 CHINESE_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
 
-def _text_layout(text, font, width):
+def _text_layout(text, font, width, leading=1.42):
     layout = QTextLayout(text.replace("\n", "\u2028"), font)
     option = QTextOption()
     option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
     layout.setTextOption(option)
     layout.beginLayout()
     height = 0.0
+    font_px = font.pixelSize() if font.pixelSize() > 0 else QFontMetricsF(font).height()
     while True:
         line = layout.createLine()
         if not line.isValid():
             break
         line.setLineWidth(width)
         line.setPosition(QPointF(0, height))
-        height += line.height()
+        height += max(line.height(), font_px * leading)
     layout.endLayout()
     return layout, height
 
@@ -51,10 +62,10 @@ def _text_layout(text, font, width):
 class TranscriptDelegate(QStyledItemDelegate):
     """Draw a separate time column and aligned, wrapping English/Chinese text."""
 
-    LEFT_PADDING = 24
-    RIGHT_PADDING = 24
-    TIME_WIDTH = 58
-    COLUMN_GAP = 14
+    LEFT_PADDING = 12
+    RIGHT_PADDING = 12
+    TIME_WIDTH = 56
+    COLUMN_GAP = 8
     TOP_PADDING = 10
     BOTTOM_PADDING = 10
 
@@ -82,19 +93,19 @@ class TranscriptDelegate(QStyledItemDelegate):
 
     def _body_width(self):
         widget = self.parent()
-        return max(
-            1,
+        available = (
             widget.viewport().width()
             - 2 * widget.spacing()
             - self.LEFT_PADDING
             - self.RIGHT_PADDING
             - self.TIME_WIDTH
-            - self.COLUMN_GAP,
+            - self.COLUMN_GAP
         )
+        return max(1, min(available, max(820, widget.font().pixelSize() * 44)))
 
     @staticmethod
     def time_font(font):
-        value = QFont(font)
+        value = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
         value.setPixelSize(12)
         return value
 
@@ -108,7 +119,7 @@ class TranscriptDelegate(QStyledItemDelegate):
         height = max(height, time_height)
         chinese = self._chinese(index)
         if chinese:
-            _, secondary = _text_layout(chinese, self.chinese_font(option.font), width)
+            _, secondary = _text_layout(chinese, self.chinese_font(option.font), width, 1.48)
             height += secondary + 6
         return QSize(
             widget.viewport().width() - 2 * widget.spacing(),
@@ -122,31 +133,45 @@ class TranscriptDelegate(QStyledItemDelegate):
         original = styled.text
         styled.text = ""
         widget = self.parent()
-        widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem, styled, painter, widget)
         timestamp, body = self._parts(original)
         width = self._body_width()
         english, height = _text_layout(body, styled.font, width)
         time_layout, _ = _text_layout(timestamp, self.time_font(styled.font), self.TIME_WIDTH)
         painter.save()
         painter.setClipRect(option.rect)
+        colors = widget.window()._colors
+        active = widget.property("active_cue") == index.row()
+        shape = QRectF(option.rect.adjusted(2, 1, -2, -1))
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        if active:
+            painter.setBrush(QColor(colors.get("transcript_active_bg", colors["accent_soft"])))
+            painter.drawRoundedRect(shape, 8, 8)
+            painter.setBrush(QColor(colors["accent"]))
+            painter.drawRoundedRect(QRectF(shape.x(), shape.y(), 3, shape.height()), 1.5, 1.5)
+        elif styled.state & (QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_HasFocus):
+            painter.setPen(QPen(QColor(colors["control"]), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(shape, 8, 8)
+        elif styled.state & QStyle.StateFlag.State_MouseOver:
+            painter.setBrush(QColor(colors["hover"]))
+            painter.drawRoundedRect(shape, 8, 8)
         origin = QPointF(
             option.rect.left() + self.LEFT_PADDING + self.TIME_WIDTH + self.COLUMN_GAP,
             option.rect.top() + self.TOP_PADDING,
         )
         painter.setPen(styled.palette.color(QPalette.ColorRole.Text))
         english.draw(painter, origin)
-        colors = getattr(widget.window(), "_colors", {})
-        painter.setPen(
-            QColor(colors["muted"])
-            if "muted" in colors
-            else styled.palette.color(QPalette.ColorRole.PlaceholderText)
-        )
+        time_font = self.time_font(styled.font)
+        baseline_offset = QFontMetricsF(styled.font).ascent() - QFontMetricsF(time_font).ascent()
+        painter.setPen(QColor(colors["accent"] if active else colors["muted"]))
         time_layout.draw(
             painter,
-            QPointF(option.rect.left() + self.LEFT_PADDING, origin.y()),
+            QPointF(option.rect.left() + self.LEFT_PADDING, origin.y() + baseline_offset),
         )
         if chinese:
-            secondary, _ = _text_layout(chinese, self.chinese_font(styled.font), width)
+            painter.setPen(QColor(colors["soft"]))
+            secondary, _ = _text_layout(chinese, self.chinese_font(styled.font), width, 1.48)
             secondary.draw(painter, origin + QPointF(0, height + 6))
         painter.restore()
 

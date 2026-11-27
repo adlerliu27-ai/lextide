@@ -1,8 +1,4 @@
-"""Native Qt theme derived from the approved Lextide UI Design System 1.1.
-
-The 1.1 HTML's semantic colors supersede the original 1.0 JSON resource.
-No web view or bundled system fonts are needed.
-"""
+"""Carbon presentation tokens and native Qt widget styles for Lextide."""
 
 from __future__ import annotations
 
@@ -18,44 +14,70 @@ from PySide6.QtWidgets import QApplication
 ASSETS = Path(__file__).parent / "assets"
 
 LIGHT = {
-    "canvas": "#F7F8FA",
+    "canvas": "#F6F7F9",
     "surface": "#FFFFFF",
-    "sidebar": "#F5F7FA",
     "subtle": "#F8FAFC",
-    "tint": "#F4F8FF",
-    "text": "#192334",
-    "soft": "#334158",
-    "muted": "#5E6C80",
-    "disabled": "#7F8A9A",
-    "line": "#E1E7EF",
+    "tint": "#F1F5F9",
+    "hover": "#EEF2F7",
+    "pressed": "#E2E8F0",
+    "line": "#E2E8F0",
     "control": "#8492A6",
-    "accent": "#1762D8",
-    "accent_hover": "#1154C3",
+    "ink": "#0F172A",
+    "secondary": "#334155",
+    "muted": "#526071",
+    "disabled": "#94A3B8",
+    "accent": "#2563EB",
+    "accent_hover": "#1D4ED8",
+    "accent_pressed": "#1E40AF",
+    "accent_soft": "#E9F2FF",
+    "transcript_active_bg": "#F0F5FC",
+    "focus_ring": "#3B82F6",
     "on_accent": "#FFFFFF",
-    "accent_soft": "#EAF2FF",
-    "hover": "#EFF3F9",
-    "success": "#22734E",
-    "error": "#B12F41",
+    "success": "#15803D",
+    "success_soft": "#ECFDF3",
+    "warning": "#B45309",
+    "warning_soft": "#FFFBEB",
+    "warning_line": "#FCD34D",
+    "error": "#B42318",
+    "error_soft": "#FEF3F2",
+    "error_line": "#FDA29B",
+    "code_bg": "#F1F5F9",
+    "sidebar": "#F6F7F9",
+    "text": "#0F172A",
+    "soft": "#334155",
 }
 DARK = {
-    "canvas": "#101722",
-    "surface": "#182230",
-    "sidebar": "#131D2A",
-    "subtle": "#1D2939",
-    "tint": "#1B2B42",
-    "text": "#EDF3FA",
-    "soft": "#D1DCEA",
-    "muted": "#A6B4C7",
-    "disabled": "#7F91A7",
-    "line": "#324257",
-    "control": "#778BA5",
-    "accent": "#8DBAFF",
-    "accent_hover": "#A4C8FF",
-    "on_accent": "#11223B",
-    "accent_soft": "#223B5F",
-    "hover": "#233249",
-    "success": "#85D6B3",
-    "error": "#FFA5B2",
+    "canvas": "#0F1621",
+    "surface": "#151F2E",
+    "subtle": "#1A2638",
+    "tint": "#202E44",
+    "hover": "#24344D",
+    "pressed": "#2C3F5E",
+    "line": "#29384E",
+    "control": "#6F839D",
+    "ink": "#F1F5F9",
+    "secondary": "#CBD5E1",
+    "muted": "#94A3B8",
+    "disabled": "#64748B",
+    "accent": "#4F8CFF",
+    "accent_hover": "#6EA1FF",
+    "accent_pressed": "#3B76F6",
+    "accent_soft": "#1E3354",
+    "transcript_active_bg": "#1C2D46",
+    "focus_ring": "#60A5FA",
+    "on_accent": "#0B1220",
+    "success": "#4ADE80",
+    "success_soft": "#132E23",
+    "warning": "#FBBF24",
+    "warning_soft": "#2E2414",
+    "warning_line": "#92400E",
+    "error": "#F87171",
+    "error_soft": "#311B1E",
+    "error_line": "#991B1B",
+    "code_bg": "#1B283B",
+    "sidebar": "#0F1621",
+    "text": "#F1F5F9",
+    "soft": "#CBD5E1",
 }
 
 
@@ -79,6 +101,27 @@ def icon(name: str, color: str = "#5E6C80", size: int = 20) -> QIcon:
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     renderer.render(painter)
+    painter.end()
+    pixmap.setDevicePixelRatio(2)
+    return QIcon(pixmap)
+
+
+def status_dot(status: str, palette: QPalette) -> QIcon:
+    colors = (
+        DARK
+        if palette.color(QPalette.ColorRole.Base).name().lower() == DARK["surface"].lower()
+        else LIGHT
+    )
+    key = {"completed": "success", "failed": "error", "running": "accent", "paused": "warning"}.get(
+        status, "muted"
+    )
+    pixmap = QPixmap(16, 16)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(colors[key]))
+    painter.drawEllipse(1, 1, 14, 14)
     painter.end()
     pixmap.setDevicePixelRatio(2)
     return QIcon(pixmap)
@@ -136,6 +179,15 @@ def stylesheet(c: dict[str, str]) -> str:
             else "font-size-chevron-light.svg"
         )
     )
+    check = (
+        ASSETS
+        / "icons"
+        / (
+            "checkbox-check-dark.svg"
+            if c["surface"] == DARK["surface"]
+            else "checkbox-check-light.svg"
+        )
+    )
     return Template(
         """
         QWidget { color: ${text}; font-size: 13px; }
@@ -153,20 +205,20 @@ def stylesheet(c: dict[str, str]) -> str:
         QFrame#TextPanel {
             background: ${surface};
             border: 1px solid ${line};
-            border-radius: 13px;
+            border-radius: 12px;
             }
-        QFrame#Hero { background: ${tint}; border: 1px solid ${line}; border-radius: 17px; }
+        QFrame#Hero { background: ${tint}; border: 1px solid ${line}; border-radius: 12px; }
         QFrame#Review { background: ${tint}; border: 1px solid ${line}; border-radius: 12px; }
         QFrame#Approval, QFrame#SettingsFooter {
             background: ${surface}; border-top: 1px solid ${line};
         }
         QLabel { background: transparent; border: none; }
-        QLabel#OverviewBrand { border: 1px solid ${line}; border-radius: 71px; }
+        QLabel#OverviewBrand { border: none; background: transparent; }
         QLabel[role="muted"] { color: ${muted}; font-size: 12px; }
         QLabel[role="micro"] { color: ${muted}; font-size: 10px; }
         QLabel[role="eyebrow"] { color: ${accent}; font-size: 10px; font-weight: 700; }
-        QLabel[role="title"] { font-size: 28px; font-weight: 700; }
-        QLabel[role="heading"] { font-size: 15px; font-weight: 600; }
+        QLabel[role="title"] { font-size: 22px; font-weight: 700; }
+        QLabel[role="heading"] { font-size: 14px; font-weight: 600; }
         QLabel[role="brand"] { font-size: 23px; font-weight: 700; }
         QLabel[role="success"] { color: ${success}; }
         QLabel[role="error"] { color: ${error}; }
@@ -215,7 +267,7 @@ def stylesheet(c: dict[str, str]) -> str:
             color: ${muted};
             text-align: left;
             border: 1px solid transparent;
-            min-height: 36px; padding: 3px 12px; border-radius: 9px;
+            min-height: 36px; padding: 3px 12px; border-radius: 8px;
         }
         QPushButton#NavButton:hover { background: ${hover}; }
         QPushButton#NavButton:checked {
@@ -228,17 +280,24 @@ def stylesheet(c: dict[str, str]) -> str:
             background: ${subtle}; color: ${disabled}; border-color: ${line};
         }
         QPushButton#PlayButton {
-            border-radius: 19px;
-            min-width: 28px;
-            min-height: 30px;
-            padding: 3px;
-            }
+            background: ${accent};
+            border: 1px solid ${accent};
+            border-radius: 18px;
+            min-height: 0;
+            padding: 0;
+        }
+        QPushButton#PlayButton:hover { background: ${accent_hover}; }
+        QPushButton#PlayButton:focus { border: 2px solid ${text}; }
+        QPushButton#PlayButton:pressed { background: ${accent}; }
+        QPushButton#PlayButton:disabled { background: ${tint}; border: 1px solid ${line}; }
         QLineEdit, QComboBox, QSpinBox {
             background: ${surface}; border: 1px solid ${control}; border-radius: 7px;
             min-height: 29px; padding: 3px 8px; selection-background-color: ${accent};
         }
-        QComboBox { padding-right: 24px; }
-        QComboBox::drop-down { border: none; width: 22px; }
+        QComboBox { padding-right: 30px; }
+        QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right;
+            border: none; width: 24px; }
+        QComboBox::down-arrow { image: url("${transcript_arrow}"); width: 12px; height: 12px; }
         QComboBox#TranscriptFontSize { padding-right: 28px; }
         QComboBox#TranscriptFontSize::drop-down {
             subcontrol-origin: padding;
@@ -271,7 +330,29 @@ def stylesheet(c: dict[str, str]) -> str:
         QPlainTextEdit#OriginalText { background: ${subtle}; }
         QPlainTextEdit#ChangesText { background: ${tint}; font-size: 12px; }
         QCheckBox { spacing: 8px; min-height: 25px; }
+        QCheckBox::indicator { width: 16px; height: 16px; border: 1.5px solid ${control};
+            border-radius: 4px; background: ${surface}; }
+        QCheckBox::indicator:checked { image: url("${check}"); background: ${accent};
+            border-color: ${accent}; }
+        QCheckBox::indicator:focus { border: 2px solid ${focus_ring}; }
+        QCheckBox::indicator:disabled { border-color: ${disabled}; background: ${subtle}; }
+        QCheckBox::indicator:checked:disabled { background: ${disabled}; }
         QCheckBox:disabled { color: ${disabled}; }
+        QFrame#Player QComboBox { padding-right: 2px; }
+        QFrame#Approval QComboBox { padding: 0 2px 0 6px; min-height: 30px; }
+        QFrame#Approval QSpinBox { padding: 0 2px; min-height: 30px; }
+        QFrame#Approval QPushButton { padding: 2px 8px; }
+        QFrame#Approval QToolButton#Disclosure { padding: 1px 2px; }
+        QFrame#StudioOptions, QFrame#LibraryInspector { border-top: 1px solid ${line}; }
+        QFrame#StudioPreparation, QWidget#OcrProgress, QFrame#OcrGate {
+            background: ${tint}; border: 1px solid ${line}; border-radius: 8px; }
+        QLabel#OcrWarning, QFrame#OcrWarning { background: ${warning_soft}; color: ${warning};
+            border: 1px solid ${warning_line}; border-radius: 8px; padding: 5px 8px; }
+        QLabel#PreviewBadge { background: ${warning_soft}; color: ${warning};
+            border-radius: 6px; padding: 2px 6px; }
+        QLabel[role="pageHeading"] { font-size: 22px; font-weight: 700; }
+        QTabWidget#StudioTextTabs QTabBar::tab { min-height: 22px; padding: 2px 10px;
+            border-radius: 8px; }
         QTabWidget::pane { border: none; }
         QTabBar::tab {
             color: ${muted};
@@ -355,4 +436,4 @@ def stylesheet(c: dict[str, str]) -> str:
             }
         QStatusBar { background: ${surface}; color: ${muted}; border-top: 1px solid ${line}; }
     """
-    ).substitute({**c, "transcript_arrow": transcript_arrow.as_posix()})
+    ).substitute({**c, "transcript_arrow": transcript_arrow.as_posix(), "check": check.as_posix()})

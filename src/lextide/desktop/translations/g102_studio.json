@@ -1,0 +1,19 @@
+{
+  "Import or paste study material to prepare your reading text.": "导入或粘贴学习材料，准备朗读稿。",
+  "Paste text or a screenshot (⌘V).": "粘贴文本或截图（⌘V）。",
+  "Paste text or a screenshot (⌘V), or import a file (⌘O).": "粘贴文本或截图（⌘V），或导入文件（⌘O）。",
+  "Preview — not yet applied": "预览 · 尚未应用",
+  "Edge online": "Edge 在线",
+  "Kokoro offline": "Kokoro 离线",
+  "US male": "美式男声",
+  "US female": "美式女声",
+  "More options": "更多选项",
+  "Only the text below and the voice settings will be sent to Microsoft Edge TTS.": "仅将下方全文及本次语音设置发送至 Microsoft Edge TTS。",
+  "Text SHA-256": "正文 SHA-256",
+  "Import a document or image (⌘O).": "导入文档或图片（⌘O）。",
+  "Auto · {name}": "自动 · {name}",
+  "Exact text to be sent · {count:,} characters": "本次发送的完整正文 · {count:,} 字符",
+  "I approve sending this text and these voice settings for this run.": "我同意为本次生成发送上方全文及这些语音设置。",
+  "Discard": "放弃",
+  "Not yet applied": "尚未应用"
+}

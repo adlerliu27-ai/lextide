@@ -124,29 +124,60 @@ def normalized(text):
 def metrics(reference, output):
     joined = "\n".join(reference)
     truth, actual = normalized(joined), normalized(output)
-    candidates = [(i, normalized(s)) for i, s in enumerate(output.splitlines()) if s.strip()]
-    matches = []
-    for line in reference:
-        target = normalized(line)
-        if candidates:
-            score, index = min(
-                (distance(target, s) / max(len(target), len(s)), i) for i, s in candidates
-            )
-            if score <= 0.2:
-                matches.append(index)
-                candidates = [(i, s) for i, s in candidates if i != index]
+    # Match each nonblank source line to at most one nonblank output line.
+    # Prefer closer text; allow reassignment so a fuzzy match cannot consume
+    # the only possible output line for a later reference.
+    actual_lines = [normalized(line) for line in output.splitlines() if line.strip()]
+    content_lines = [line for line in reference if line.strip()]
+    expected_lines = [normalized(line) for line in content_lines]
+    candidates = []
+    for target in expected_lines:
+        scores = sorted(
+            (distance(target, line) / max(len(target), len(line)), i)
+            for i, line in enumerate(actual_lines)
+        )
+        candidates.append([i for score, i in scores if score <= 0.2])
+    assigned = {}
+
+    def match(source, visited):
+        for dest in candidates[source]:
+            if dest in visited:
+                continue
+            visited.add(dest)
+            if dest not in assigned or match(assigned[dest], visited):
+                assigned[dest] = source
+                return True
+        return False
+
+    for source in range(len(expected_lines)):
+        match(source, set())
+
+    # An ordered assignment may differ from the maximum matching for duplicate
+    # lines. The earliest valid successor leaves the most room for later lines.
+    last = -1
+    ordered = True
+    for options in candidates:
+        successor = min((idx for idx in options if idx > last), default=None)
+        if successor is None:
+            ordered = False
+            break
+        last = successor
     return {
         "normalized_errors": distance(truth, actual),
         "normalized_chars": len(truth),
         "raw_errors": distance(joined, output.rstrip("\n")),
         "raw_chars": len(joined),
-        "lines": len(reference),
-        "recalled_lines": len(matches),
-        "order_correct_and_complete": len(matches) == len(reference) and matches == sorted(matches),
+        "lines": len(expected_lines),
+        "recalled_lines": len(assigned),
+        "unmatched_reference_lines": [
+            line for i, line in enumerate(content_lines) if i not in assigned.values()
+        ],
+        "unmatched_output_line_count": len(actual_lines) - len(assigned),
+        "order_correct_and_complete": ordered,
     }
 
 
-def render(path, lines, font, margin, indent, ink):
+def render(path, lines, font, margin, indent, ink, *, background="white", blur=0):
     from PIL import Image, ImageDraw
 
     boxes = [font.getbbox(s) for s in lines]
@@ -154,7 +185,7 @@ def render(path, lines, font, margin, indent, ink):
     gap = max(10, height // 2)
     width = max(right - left for left, _, right, _ in boxes) + 2 * margin + indent
     image = Image.new(
-        "RGB", (width, 2 * margin + len(lines) * height + (len(lines) - 1) * gap), "white"
+        "RGB", (width, 2 * margin + len(lines) * height + (len(lines) - 1) * gap), background
     )
     draw = ImageDraw.Draw(image)
     for i, (line, (left, top, _, _)) in enumerate(zip(lines, boxes, strict=True)):
@@ -164,6 +195,10 @@ def render(path, lines, font, margin, indent, ink):
             font=font,
             fill=ink,
         )
+    if blur:
+        from PIL import ImageFilter
+
+        image = image.filter(ImageFilter.GaussianBlur(blur))
     image.save(path)
 
 
@@ -188,9 +223,39 @@ def summarize(rows):
     }
 
 
-def main():
+def golden_images(output, primary_font, second_font=None):
     from PIL import ImageFont
 
+    for n, (zh1, zh2, en1, en2) in enumerate(LESSONS):
+        font_path = second_font if n % 2 and second_font else primary_font
+        font = ImageFont.truetype(str(font_path), [32, 40, 48][n % 3])
+        for kind, lines in (
+            ("chinese", [zh1, zh2]),
+            ("english", [en1, en2]),
+            ("mixed", [en1, zh1, en2]),
+        ):
+            ext = ["png", "jpeg", "jpg"][n % 3]
+            path = output / f"{kind}-{n:02d}.{ext}"
+            render(
+                path,
+                lines,
+                font,
+                [22, 32, 44][n % 3],
+                [0, 12, 24][n % 3],
+                ["#101010", "#202020"][n % 2],
+            )
+            yield {
+                "image": path.name,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "font": font_path.name,
+                "font_size": font.size,
+                "reference": lines,
+                "kind": kind,
+                "split": "development" if n < 4 else "validation" if n < 12 else "holdout",
+            }
+
+
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--font", required=True, type=Path)
@@ -204,56 +269,34 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     rows = []
-    for n, (zh1, zh2, en1, en2) in enumerate(LESSONS):
-        font_path = args.second_font if n % 2 and args.second_font else args.font
-        font = ImageFont.truetype(str(font_path), [32, 40, 48][n % 3])
-        for kind, lines in (
-            ("chinese", [zh1, zh2]),
-            ("english", [en1, en2]),
-            ("mixed", [en1, zh1, en2]),
-        ):
-            ext = ["png", "jpeg", "jpg"][n % 3]
-            path = args.output / f"{kind}-{n:02d}.{ext}"
-            render(
-                path,
-                lines,
-                font,
-                [22, 32, 44][n % 3],
-                [0, 12, 24][n % 3],
-                ["#101010", "#202020"][n % 2],
-            )
-            cmd = [
-                args.tesseract,
-                str(path),
-                "stdout",
-                "-l",
-                "chi_sim+eng",
-                "--psm",
-                "6",
-                "--oem",
-                "1",
-            ]
-            if not args.default_row_rejection:
-                cmd.extend(["-c", "textord_noise_rejrows=0"])
-            start = time.monotonic()
-            p = subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=True)
-            rows.append(
-                {
-                    "image": path.name,
-                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                    "font": font_path.name,
-                    "font_size": font.size,
-                    "reference": lines,
-                    "kind": kind,
-                    "split": "development" if n < 4 else "validation" if n < 12 else "holdout",
-                    "command": cmd,
-                    "stdout": p.stdout,
-                    "stderr": p.stderr,
-                    "exit_code": p.returncode,
-                    "seconds": round(time.monotonic() - start, 4),
-                    "metrics": metrics(lines, p.stdout),
-                }
-            )
+    for fixture in golden_images(args.output, args.font, args.second_font):
+        path = args.output / fixture["image"]
+        cmd = [
+            args.tesseract,
+            str(path),
+            "stdout",
+            "-l",
+            "chi_sim+eng",
+            "--psm",
+            "6",
+            "--oem",
+            "1",
+        ]
+        if not args.default_row_rejection:
+            cmd.extend(["-c", "textord_noise_rejrows=0"])
+        start = time.monotonic()
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=True)
+        rows.append(
+            {
+                **fixture,
+                "command": cmd,
+                "stdout": p.stdout,
+                "stderr": p.stderr,
+                "exit_code": p.returncode,
+                "seconds": round(time.monotonic() - start, 4),
+                "metrics": metrics(fixture["reference"], p.stdout),
+            }
+        )
     report = {
         s: {
             k: summarize([r for r in rows if r["kind"] == k and r["split"] == s])

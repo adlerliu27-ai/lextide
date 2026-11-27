@@ -566,6 +566,24 @@ def history(request: dict) -> dict:
     }
 
 
+def library_script(request: dict) -> dict:
+    """Load just the saved reading text, using its recorded identity."""
+    folder = safe_directory(_path(request.get("path")))
+    if (folder / "task.json").is_file():
+        text = status({"task_path": str(folder)})["review_text"]
+    else:
+        manifest = read_json(folder / "manifest.json")
+        text = _read_text(folder / "tts.txt")
+        if manifest.get("text_sha256") != _sha(text):
+            raise ValidationError("Saved reading text does not match its manifest.")
+    return {
+        "text": text,
+        "source_sha256": _sha(text),
+        "format": "txt",
+        "source_path": str(folder / "tts.txt"),
+    }
+
+
 def parse_srt(text: str) -> list[dict]:
     """Read exact integer millisecond timestamps, preserving real inter-cue gaps."""
     if not isinstance(text, str) or len(text.encode("utf-8")) > 16 * 1024 * 1024:
@@ -742,6 +760,8 @@ async def dispatch(request: dict, emit: EventSink | None = None) -> dict:
         return await resume(request, emit)
     if command == "cancel":
         return cancel_task(_path(request.get("task_path")))
+    if command == "library_script":
+        return library_script(request)
     if command == "status":
         return status(request)
     if command == "history":
