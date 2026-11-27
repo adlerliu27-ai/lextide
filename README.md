@@ -8,21 +8,34 @@ Lextide is a Python learning project for macOS: prepare a reading script, explic
 
 **0.6.1 is the first public source release.** G1–G6 passed independent engineering validation and user acceptance; the two G6 findings in Edge quotation metadata and mixed English/Chinese preparation were retested and are closed (`G6_PASS` / `USER_ACCEPTED`).
 
-The latest public stable release is [v0.9.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.9.0). This working tree is the local 0.10.0 development candidate.
+The latest public source release is [v0.10.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.10.0). This repository publishes **source only**; the released source matches that tag. A newer Carbon interface is under development locally and is not part of any public release yet.
 
 The source code is released under the [MIT License](LICENSE). Brand artwork is reserved and governed by [TRADEMARKS.md](TRADEMARKS.md); the exact asset scope is in [ASSETS_LICENSE.md](ASSETS_LICENSE.md). This release is **source only** — it does not include, and does not authorize, a public `.app` distribution.
 
-![Lextide English interface](docs/images/g6-english.png)
-![Lextide 简体中文界面](docs/images/g6-chinese.png)
+### Development preview — Carbon interface
 
-These screenshots show the accepted 0.6.0 interface, not the current layout. Current text processing, generation and language behavior is described below.
+> **Not a public release.** The screenshots below show the Carbon interface under local development.
+> It is built and regression-tested on this machine, but it has **not** been published, notarized or
+> accepted for release. The released source at [v0.10.0](https://github.com/adlerliu27-ai/lextide/releases/tag/v0.10.0)
+> predates this layout.
+
+| | |
+|---|---|
+| ![Overview](docs/images/carbon/overview.png) | ![Studio](docs/images/carbon/studio.png) |
+| **Overview** — restored workspace view, recent sessions, idle player | **Studio** — source and reading text, voice and rate dock |
+| ![Listen](docs/images/carbon/listen.png) | ![Focus View](docs/images/carbon/focus.png) |
+| **Listen** — bilingual subtitles, timestamps, current-sentence highlight | **Focus View** — subtitles only |
+| ![OCR review](docs/images/carbon/ocr-review.png) | ![Dark mode](docs/images/carbon/overview-zh-dark.png) |
+| **OCR review** — original image beside the editable result | **Dark mode** — 简体中文 |
+
+Earlier released interfaces are kept in [docs/images](docs/images) for comparison.
 
 ## What it does
 
 - Native PySide6 desktop: Overview, Studio, Library, Listen, Tasks and Settings.
 - Local TXT, Markdown, DOCX and **text-layer** PDF import; preserved source and editable speech previews.
 - **Text Processing → English Only / 文本处理 → 仅英文** immediately prepares an editable local preview using the existing translation-removal rules. It recognizes bounded translation spans, including joined bilingual text and translations containing names or numbers. Uncertain passages remain visible for review; synthesis with an English voice is blocked while Chinese text remains. This is not automatic translation or a general language detector. The conservative and enhanced Python cleaning APIs remain available.
-- Review the visible reading text, then explicitly choose **Send to Edge & Generate** for each online run. Each click captures a fresh text/settings snapshot and SHA-256; changes during preparation invalidate that click.
+- Review the visible reading text, then explicitly confirm the online transmission for each run (the consent dialog shows the exact text, its SHA-256, voice and rate). Each click captures a fresh text/settings snapshot and SHA-256; changes during preparation invalidate that click.
 - Kokoro ONNX offline speech with separately installed runtime and verified models; no silent online fallback.
 - Long-document chunks, validated raw PCM cache, pause/cancel/resume, atomic local exports and historical manifest compatibility.
 - Local MP3 playback with sentence subtitles, adjustable transcript size (12–40 px), light/dark themes.
