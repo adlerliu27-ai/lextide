@@ -52,6 +52,8 @@ jobs:
             tests/test_source_snapshot.py
       - name: Install locked desktop extras for local OCR review
         run: uv sync --locked --extra desktop --no-default-groups --group dev --python 3.13
+      - name: Install FFmpeg for local audio validation in OCR review tests
+        run: brew install ffmpeg
       - name: Run OCR service, worker and review regressions
         env:
           QT_QPA_PLATFORM: offscreen
